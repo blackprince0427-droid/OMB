@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>小型辦公軟件 · 第一版 UI（DEV-V1）</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --sidebar: #f7f8fa;
+    --card: #ffffff;
+    --line: #e6e8ee;
+    --line-strong: #d8dbe3;
+    --text: #1c1f26;
+    --muted: #6d7380;
+    --faint: #8b919d;
+    --green: #178a4a;
+    --green-2: #1fa85a;
+    --green-soft: #e7f6ee;
+    --green-line: #b7e4c8;
+    --blue: #2f6fed;
+    --blue-soft: #e8f0fe;
+    --orange: #e07a1f;
+    --orange-soft: #fff1e4;
+    --purple: #7a4dd6;
+    --purple-soft: #f3edff;
+    --red: #d23b3b;
+    --red-soft: #fdecec;
+    --pink-banner: #fff1f2;
+    --pink-line: #f6d5d8;
+    --shadow: 0 1px 2px rgba(22, 28, 45, .04), 0 8px 24px rgba(22, 28, 45, .04);
+    --radius: 16px;
+    --sidebar-w: 236px;
+    --font: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--font);
+    color: var(--text);
+    background: #eceef2;
+    letter-spacing: .01em;
+  }
+  button, input, select { font-family: inherit; }
+  button { cursor: pointer; }
+  .app {
+    min-height: 100%;
+    display: flex;
+    background: var(--bg);
+  }
+  .sidebar {
+    width: var(--sidebar-w);
+    flex: 0 0 var(--sidebar-w);
+    background: var(--sidebar);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    padding: 18px 14px 14px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px 16px;
+  }
+  .logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(160deg, #2fbe6a, #178a4a);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 15px;
+    box-shadow: 0 4px 10px rgba(23, 138, 74, .22);
+  }
+  .brand h1 { margin: 0; font-size: 15px; font-weight: 700; }
+  .brand p { margin: 2px 0 0; font-size: 12px; color: var(--faint); }
+  .nav-label {
+    margin: 10px 10px 6px;
+    font-size: 11px;
+    color: #9aa0ab;
+    font-weight: 600;
+  }
+  .nav-btn {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: #3c4250;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    padding: 9px 10px;
+    border-radius: 10px;
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+  .nav-btn .ic {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 22px;
+  }
+  .nav-btn.active { background: #e8eaef; font-weight: 650; color: var(--text); }
+  .nav-btn:hover { background: #eef0f3; }
+  .nav-btn.active:hover { background: #e3e6eb; }
+  .side-foot {
+    margin-top: auto;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 14px;
+    padding: 12px;
+  }
+  .side-foot .who { font-size: 12px; color: var(--muted); }
+  .side-foot strong { display: block; margin-top: 2px; font-size: 14px; }
+  .role-pill {
+    display: inline-flex;
+    margin-top: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--green-soft);
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .ghost {
+    margin-top: 10px;
+    width: 100%;
+    border: 1px dashed var(--line-strong);
+    background: #fafbfc;
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 7px 8px;
+    font-size: 12px;
+  }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar {
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 22px;
+    gap: 10px;
+  }
+  .status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: #3d4450;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green-2); box-shadow: 0 0 0 3px rgba(31,168,90,.15); }
+  .content { padding: 6px 28px 32px; max-width: 1180px; }
+  .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+  .page-title { display: flex; align-items: center; gap: 10px; }
+  .page-title h2 { margin: 0; font-size: 22px; font-weight: 700; }
+  .page-title p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  .title-badge {
+    width: 34px; height: 34px; border-radius: 10px;
+    display: grid; place-items: center; background: var(--blue-soft); color: var(--blue);
+  }
+  .banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: var(--pink-banner);
+    border: 1px solid var(--pink-line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .banner .left { display: flex; gap: 12px; align-items: flex-start; }
+  .heart {
+    width: 28px; height: 28px; border-radius: 8px; background: #fff;
+    display: grid; place-items: center; color: #e2546a; flex: 0 0 28px;
+    border: 1px solid #f3d0d6;
+  }
+  .banner h3 { margin: 0 0 3px; font-size: 14px; }
+  .banner p { margin: 0; color: #7a6166; font-size: 12.5px; line-height: 1.55; }
+  .btn {
+    border: 0;
+    border-radius: 9px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .btn-primary { background: #1f8f4e; color: #fff; }
+  .btn-primary:hover { background: #187a43; }
+  .btn-soft { background: #fff; color: #394050; border: 1px solid var(--line-strong); }
+  .btn-soft:hover { background: #f7f8fa; }
+  .btn-danger { background: #fff; color: #b42318; border: 1px solid #f1c5c1; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .status-card { padding: 16px 18px; margin-bottom: 14px; }
+  .status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .status-main { display: flex; gap: 12px; align-items: center; }
+  .check {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--green-soft); color: var(--green);
+    display: grid; place-items: center; font-weight: 700;
+  }
+  .status-main h3 { margin: 0; font-size: 16px; }
+  .status-main p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+  .actions { display: flex; gap: 8px; }
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 6px;
+  }
+  .flow-item { text-align: center; position: relative; }
+  .flow-item:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 16px;
+    left: calc(50% + 22px);
+    width: calc(100% - 44px);
+    height: 2px;
+    background: var(--green-line);
+  }
+  .flow-ic {
+    width: 32px; height: 32px; margin: 0 auto 8px; border-radius: 50%;
+    background: var(--green-soft); color: var(--green);
+    display: grid; place-items: center; position: relative; z-index: 1;
+    border: 2px solid #fff;
+  }
+  .flow-item b { display: block; font-size: 13px; }
+  .flow-item span { display: block; margin-top: 2px; color: var(--faint); font-size: 12px; }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 14px 0;
+  }
+  .stat { padding: 14px 16px; display: flex; gap: 12px; align-items: center; }
+  .stat .ic {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: grid; place-items: center; font-weight: 700;
+  }
+  .stat b { display: block; font-size: 22px; line-height: 1.1; }
+  .stat span { color: var(--muted); font-size: 12.5px; }
+  .split { display: grid; grid-template-columns: 1.15fr .85fr; gap: 12px; }
+  .panel { padding: 14px 16px 8px; }
+  .panel h3 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .row-item {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 11px 0; border-bottom: 1px solid #f0f1f4;
+  }
+  .row-item:last-child { border-bottom: 0; }
+  .who-line { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+  .avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700;
+  }
+  .tag {
+    font-size: 11px; padding: 2px 7px; border-radius: 999px; font-weight: 650;
+  }
+  .tag-green { background: var(--green-soft); color: var(--green); }
+  .tag-blue { background: var(--blue-soft); color: var(--blue); }
+  .tag-orange { background: var(--orange-soft); color: #b86112; }
+  .time { color: var(--faint); font-size: 12px; white-space: nowrap; }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .cal-nav { display: flex; gap: 8px; align-items: center; }
+  .month-label { font-size: 20px; font-weight: 700; }
+  .weekdays, .days { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .weekdays span {
+    text-align: center; color: var(--muted); font-size: 12px; font-weight: 650; padding: 8px 0;
+  }
+  .day {
+    min-height: 92px;
+    border: 1px solid #eef0f3;
+    background: #fff;
+    padding: 8px;
+    text-align: left;
+    color: var(--text);
+    position: relative;
+  }
+  .day.out { color: #c0c4cc; background: #fbfbfc; }
+  .day .n {
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 13px; font-weight: 650;
+  }
+  .day.today { background: #f4fbf7; }
+  .day.today .n { background: var(--green); color: #fff; }
+  .day .mark { margin-top: 8px; font-size: 11px; color: var(--green); font-weight: 650; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  label { display: block; font-size: 12.5px; color: #4b5160; margin-bottom: 6px; font-weight: 650; }
+  input, select {
+    width: 100%;
+    border: 1px solid var(--line-strong);
+    background: #fff;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    outline: none;
+  }
+  input:focus, select:focus { border-color: #8eb7ff; box-shadow: 0 0 0 3px rgba(47,111,237,.12); }
+  .field { margin-bottom: 12px; }
+  .span-2 { grid-column: span 2; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 650; font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 11px 10px; border-bottom: 1px solid #f1f2f5; }
+  .login-wrap {
+    min-height: 100%;
+    display: grid;
+    place-items: center;
+    background:
+      radial-gradient(900px 420px at 15% -10%, #e7f6ee 0%, transparent 60%),
+      radial-gradient(700px 380px at 100% 0%, #e8f0fe 0%, transparent 55%),
+      #f4f5f7;
+    padding: 24px;
+  }
+  .login-card { width: min(440px, 100%); padding: 28px 28px 22px; }
+  .login-card h2 { margin: 14px 0 4px; font-size: 22px; }
+  .login-card .sub { margin: 0 0 18px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+  .error {
+    display: none;
+    background: var(--red-soft);
+    color: #9f1d1d;
+    border: 1px solid #f3c7c7;
+    border-radius: 10px;
+    padding: 9px 11px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .error.show { display: block; }
+  .hint { margin-top: 14px; color: var(--faint); font-size: 12px; line-height: 1.55; }
+  .scope {
+    margin-top: 16px;
+    background: #f8fafc;
+    border: 1px dashed var(--line-strong);
+    border-radius: 12px;
+    padding: 10px 12px;
+    color: #667085;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .empty { color: var(--muted); font-size: 13px; padding: 16px 0; }
+  @media (max-width: 980px) {
+    .sidebar { display: none; }
+    .stats, .split, .flow, .form-grid { grid-template-columns: 1fr; }
+    .span-2 { grid-column: auto; }
+    .content { padding: 8px 14px 24px; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const STORE_KEY = "osp-dev-v1-users";
+const SESSION_KEY = "osp-dev-v1-session";
+
+const seedUsers = [
+  { account: "CEO", password: "CEO", name: "預設管理員", role: "CEO", createdAt: "2026-10-08 09:00" }
+];
+
+function loadUsers() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return seedUsers.slice();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length ? parsed : seedUsers.slice();
+  } catch (e) {
+    return seedUsers.slice();
+  }
+}
+function saveUsers(users) { localStorage.setItem(STORE_KEY, JSON.stringify(users)); }
+function loadSession() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null"); } catch (e) { return null; }
+}
+function saveSession(user) {
+  if (!user) sessionStorage.removeItem(SESSION_KEY);
+  else sessionStorage.setItem(SESSION_KEY, JSON.stringify({ account: user.account, name: user.name, role: user.role }));
+}
+
+const state = {
+  page: "overview",
+  users: loadUsers(),
+  session: loadSession(),
+  cursor: new Date(2026, 9, 1),
+  loginError: "",
+  formError: "",
+  formOk: "",
+  activity: []
+};
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function stamp(d) {
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
+function isToday(y, m, day) {
+  const n = new Date();
+  return n.getFullYear() === y && n.getMonth() === m && n.getDate() === day;
+}
+function monthMatrix(date) {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const first = new Date(y, m, 1);
+  const start = first.getDay();
+  const days = new Date(y, m + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < start; i++) {
+    const d = new Date(y, m, 1 - (start - i));
+    cells.push({ y: d.getFullYear(), m: d.getMonth(), d: d.getDate(), out: true });
+  }
+  for (let d = 1; d <= days; d++) cells.push({ y, m, d, out: false });
+  while (cells.length % 7 !== 0) {
+    const last = cells[cells.length - 1];
+    const d = new Date(last.y, last.m, last.d + 1);
+    cells.push({ y: d.getFullYear(), m: d.getMonth(), d: d.getDate(), out: true });
+  }
+  return cells;
+}
+function roleColor(role) {
+  return { CEO: "#178a4a", HR: "#2f6fed", "會計": "#e07a1f", "員工": "#7a4dd6" }[role] || "#667085";
+}
+function icon(name) {
+  const paths = {
+    home: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+    cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    users: '<circle cx="9" cy="8" r="3"/><path d="M3.5 19c.6-3 2.7-4.5 5.5-4.5S14 16 14.5 19"/><circle cx="17" cy="9" r="2.2"/><path d="M16 14.6c2.2.3 3.8 1.6 4.4 4.4"/>',
+    check: '<path d="M5 12.5 9.2 17 19 7"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>'
+  };
+  return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || "") + '</svg>';
+}
+
+function login(account, password) {
+  const user = state.users.find(u => u.account === account && u.password === password);
+  if (!user) {
+    state.loginError = "帳戶或密碼不正確，未能進入主框架。";
+    render();
+    return;
+  }
+  state.session = { account: user.account, name: user.name, role: user.role };
+  saveSession(user);
+  state.loginError = "";
+  state.page = "overview";
+  state.activity.unshift({ name: user.name, account: user.account, action: "登入主框架", time: stamp(new Date()), tag: "已驗證" });
+  render();
+}
+function resetPrototype() {
+  sessionStorage.removeItem(SESSION_KEY);
+  state.session = null;
+  state.page = "overview";
+  state.loginError = "";
+  render();
+}
+function addUser(payload) {
+  state.formOk = "";
+  if (!payload.name || !payload.account || !payload.password) {
+    state.formError = "顯示名稱、帳戶與密碼均須填寫。";
+    render();
+    return;
+  }
+  if (state.users.some(u => u.account.toLowerCase() === payload.account.toLowerCase())) {
+    state.formError = "此帳戶已存在，請使用另一個帳戶名稱。";
+    render();
+    return;
+  }
+  const row = { ...payload, createdAt: stamp(new Date()) };
+  state.users.push(row);
+  saveUsers(state.users);
+  state.formError = "";
+  state.formOk = "已新增使用者「" + payload.name + "」。角色於建立時寫入；本版不提供事後指派畫面。";
+  state.activity.unshift({ name: state.session.name, account: state.session.account, action: "新增使用者 " + payload.account, time: row.createdAt, tag: "使用者" });
+  render();
+}
+
+function renderLogin() {
+  return `
+  <div class="login-wrap">
+    <div class="card login-card">
+      <div class="logo">辦</div>
+      <h2>小型辦公軟件</h2>
+      <p class="sub">第一版登入。未通過驗證不得進入主框架。預設帳戶與密碼均為 CEO。</p>
+      <div class="error ${state.loginError ? "show" : ""}">${state.loginError}</div>
+      <form id="loginForm">
+        <div class="field"><label for="account">帳戶</label><input id="account" name="account" autocomplete="username" value="CEO" /></div>
+        <div class="field"><label for="password">密碼</label><input id="password" name="password" type="password" autocomplete="current-password" value="CEO" /></div>
+        <button class="btn btn-primary" type="submit" style="width:100%;padding:11px 12px;">登入</button>
+      </form>
+      <p class="hint">驗收對照：帳戶 CEO、密碼 CEO 可登入；錯誤密碼停留於此頁。更改密碼與登出方式未確認，本版不提供。</p>
+    </div>
+  </div>`;
+}
+
+function shell(inner) {
+  const s = state.session;
+  const nav = [
+    { id: "overview", group: "營運", label: "總覽", ic: "home", bg: "#e8f0fe", color: "#2f6fed" },
+    { id: "calendar", group: "營運", label: "日曆", ic: "cal", bg: "#e7f6ee", color: "#178a4a" }
+  ];
+  if (s.role === "CEO") nav.push({ id: "users", group: "管理", label: "使用者", ic: "users", bg: "#f3edff", color: "#7a4dd6" });
+  let lastGroup = "";
+  const navHtml = nav.map(item => {
+    const label = item.group !== lastGroup ? `<div class="nav-label">${item.group}</div>` : "";
+    lastGroup = item.group;
+    return label + `<button class="nav-btn ${state.page === item.id ? "active" : ""}" data-page="${item.id}"><span class="ic" style="background:${item.bg};color:${item.color}">${icon(item.ic)}</span>${item.label}</button>`;
+  }).join("");
+  return `
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand"><div class="logo">辦</div><div><h1>小型辦公</h1><p>DEV-V1 · 主框架</p></div></div>
+      ${navHtml}
+      <div class="side-foot">
+        <div class="who">目前使用者</div>
+        <strong>${s.name}</strong>
+        <div style="color:var(--faint);font-size:12px;margin-top:2px;">${s.account}</div>
+        <span class="role-pill">${s.role}</span>
+        <button class="ghost" id="resetBtn" type="button">原型重置（非正式登出）</button>
+      </div>
+    </aside>
+    <section class="main">
+      <div class="topbar"><span class="status-chip"><span class="dot"></span>已登入 · 主框架</span></div>
+      <div class="content">${inner}</div>
+    </section>
+  </div>`;
+}
+
+function renderOverview() {
+  const s = state.session;
+  const now = new Date();
+  const monthDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const recent = state.activity.slice(0, 4);
+  const recentHtml = recent.length ? recent.map(a => `
+    <div class="row-item">
+      <div class="who-line"><span class="avatar" style="background:${roleColor(s.role)}">${a.name.slice(0,1)}</span>${a.name}<span class="tag tag-green">${a.tag}</span></div>
+      <span class="time">${a.time.slice(11)} · ${a.action}</span>
+    </div>`).join("") : `<div class="empty">尚無最近活動。登入成功已寫入本次工作階段。</div>`;
+  return shell(`
+    <div class="page-head">
+      <div class="page-title"><span class="title-badge">${icon("home")}</span><div><h2>總覽</h2><p>主框架狀態、今日與進入日曆的入口</p></div></div>
+    </div>
+    <div class="banner">
+      <div class="left"><span class="heart">§</span><div><h3>第一版只開放已確認範圍</h3><p>登入、角色資料、CEO 新增使用者、主框架與月視圖日曆。審批、部門、角色指派畫面、更改密碼與登出方式不在本頁實作。</p></div></div>
+      <button class="btn btn-primary" data-page="calendar" type="button">前往月視圖日曆</button>
+    </div>
+    <div class="card status-card">
+      <div class="status-row">
+        <div class="status-main"><span class="check">${icon("check")}</span><div><h3>工作階段正常</h3><p>已通過登入驗證。目前使用者 ${s.name}（${s.role}）可使用主框架。</p></div></div>
+        <div class="actions"><button class="btn btn-soft" data-page="calendar" type="button">打開日曆</button></div>
+      </div>
+      <div class="flow">
+        <div class="flow-item"><div class="flow-ic">${icon("check")}</div><b>登入驗證</b><span>已通過</span></div>
+        <div class="flow-item"><div class="flow-ic">${icon("home")}</div><b>主框架</b><span>導覽已顯示</span></div>
+        <div class="flow-item"><div class="flow-ic">${icon("cal")}</div><b>日曆入口</b><span>可進入</span></div>
+        <div class="flow-item"><div class="flow-ic">${icon("users")}</div><b>目前使用者</b><span>${s.role}</span></div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="card stat"><span class="ic" style="background:#e8f0fe;color:#2f6fed">日</span><div><b>${now.getDate()}</b><span>今天 · ${now.getFullYear()}年${now.getMonth()+1}月</span></div></div>
+      <div class="card stat"><span class="ic" style="background:#e7f6ee;color:#178a4a">月</span><div><b>${monthDays}</b><span>本月日數</span></div></div>
+      <div class="card stat"><span class="ic" style="background:#f3edff;color:#7a4dd6">人</span><div><b>${state.users.length}</b><span>已建立使用者</span></div></div>
+    </div>
+    <div class="split">
+      <div class="card panel">
+        <h3>最近活動</h3>
+        ${recentHtml}
+        <div class="row-item"><div class="who-line"><span class="avatar" style="background:${roleColor(s.role)}">${s.name.slice(0,1)}</span>${s.name}<span class="tag tag-blue">目前使用者</span></div><span class="time">${s.account}</span></div>
+      </div>
+      <div class="card panel">
+        <h3>本版入口</h3>
+        <div class="row-item"><div>月視圖日曆<br><span style="color:var(--faint);font-size:12px;">七欄、標示今天、上一月／下一月</span></div><button class="btn btn-soft" data-page="calendar" type="button">進入</button></div>
+        ${s.role === "CEO" ? `<div class="row-item"><div>新增使用者<br><span style="color:var(--faint);font-size:12px;">僅 CEO。角色於建立時選定。</span></div><button class="btn btn-soft" data-page="users" type="button">進入</button></div>` : `<div class="row-item"><div>新增使用者<br><span style="color:var(--faint);font-size:12px;">目前角色不可使用。</span></div><span class="tag tag-orange">僅 CEO</span></div>`}
+        <div class="scope">不做：更改密碼、登出、角色指派畫面、個人事項、部門、審批路徑。</div>
+      </div>
+    </div>
+  `);
+}
+
+function renderCalendar() {
+  const cells = monthMatrix(state.cursor);
+  const y = state.cursor.getFullYear();
+  const m = state.cursor.getMonth();
+  const weeks = ["日", "一", "二", "三", "四", "五", "六"];
+  const days = cells.map(c => {
+    const today = isToday(c.y, c.m, c.d);
+    return `<button class="day ${c.out ? "out" : ""} ${today ? "today" : ""}" type="button" disabled><span class="n">${c.d}</span>${today ? '<div class="mark">今天</div>' : ""}</button>`;
+  }).join("");
+  return shell(`
+    <div class="page-head">
+      <div class="page-title"><span class="title-badge" style="background:#e7f6ee;color:#178a4a">${icon("cal")}</span><div><h2>日曆</h2><p>只提供月視圖。今天可識別，可前往上一月與下一月。</p></div></div>
+    </div>
+    <div class="card" style="padding:16px;">
+      <div class="cal-head">
+        <div class="month-label">${y}年${m + 1}月</div>
+        <div class="cal-nav">
+          <button class="btn btn-soft" id="prevMonth" type="button">上一月</button>
+          <button class="btn btn-soft" id="thisMonth" type="button">今天</button>
+          <button class="btn btn-soft" id="nextMonth" type="button">下一月</button>
+        </div>
+      </div>
+      <div class="weekdays">${weeks.map(w => `<span>${w}</span>`).join("")}</div>
+      <div class="days">${days}</div>
+    </div>
+  `);
+}
+
+function renderUsers() {
+  if (state.session.role !== "CEO") {
+    return shell(`<div class="card" style="padding:20px;"><h2>沒有權限</h2><p>新增使用者只限 CEO。</p></div>`);
+  }
+  const rows = state.users.map(u => `<tr><td>${u.name}</td><td>${u.account}</td><td><span class="tag tag-green">${u.role}</span></td><td>${u.createdAt}</td></tr>`).join("");
+  return shell(`
+    <div class="page-head">
+      <div class="page-title"><span class="title-badge" style="background:#f3edff;color:#7a4dd6">${icon("users")}</span><div><h2>使用者</h2><p>CEO 可新增使用者。本頁不是角色指派畫面，角色只在建立時寫入。</p></div></div>
+    </div>
+    <div class="split">
+      <div class="card" style="padding:16px;">
+        <h3 style="margin:0 0 8px;">已建立帳戶</h3>
+        <table><thead><tr><th>顯示名稱</th><th>帳戶</th><th>角色</th><th>建立時間</th></tr></thead><tbody>${rows}</tbody></table>
+      </div>
+      <div class="card" style="padding:16px;">
+        <h3 style="margin:0 0 12px;">新增使用者</h3>
+        <div class="error ${state.formError ? "show" : ""}">${state.formError}</div>
+        ${state.formOk ? `<div class="scope" style="margin-top:0;margin-bottom:12px;border-style:solid;background:#e7f6ee;color:#17693a;">${state.formOk}</div>` : ""}
+        <form id="userForm">
+          <div class="field"><label for="uname">顯示名稱</label><input id="uname" name="name" /></div>
+          <div class="field"><label for="uacc">帳戶</label><input id="uacc" name="account" /></div>
+          <div class="field"><label for="upw">密碼</label><input id="upw" name="password" type="text" /></div>
+          <div class="field"><label for="urole">角色</label>
+            <select id="urole" name="role"><option>員工</option><option>HR</option><option>會計</option><option>CEO</option></select>
+          </div>
+          <button class="btn btn-primary" type="submit">新增</button>
+        </form>
+        <div class="scope">角色區分 CEO、HR、會計、員工。指派畫面、審批分配與更改密碼不在第一版。</div>
+      </div>
+    </div>
+  `);
+}
+
+function render() {
+  const root = document.getElementById("root");
+  root.innerHTML = state.session ? (state.page === "calendar" ? renderCalendar() : state.page === "users" ? renderUsers() : renderOverview()) : renderLogin();
+  const form = document.getElementById("loginForm");
+  if (form) form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    login(form.account.value.trim(), form.password.value);
+  });
+  document.querySelectorAll("[data-page]").forEach(btn => btn.addEventListener("click", () => {
+    state.page = btn.getAttribute("data-page");
+    state.formError = "";
+    render();
+  }));
+  const reset = document.getElementById("resetBtn");
+  if (reset) reset.addEventListener("click", resetPrototype);
+  const prev = document.getElementById("prevMonth");
+  if (prev) prev.addEventListener("click", () => { state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() - 1, 1); render(); });
+  const next = document.getElementById("nextMonth");
+  if (next) next.addEventListener("click", () => { state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + 1, 1); render(); });
+  const today = document.getElementById("thisMonth");
+  if (today) today.addEventListener("click", () => { const n = new Date(); state.cursor = new Date(n.getFullYear(), n.getMonth(), 1); render(); });
+  const userForm = document.getElementById("userForm");
+  if (userForm) userForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    addUser({ name: userForm.name.value.trim(), account: userForm.account.value.trim(), password: userForm.password.value, role: userForm.role.value });
+  });
+}
+
+function boot() {
+  const params = new URLSearchParams(location.search);
+  if (params.get("autologin") === "1") {
+    const user = state.users[0];
+    state.session = { account: user.account, name: user.name, role: user.role };
+    state.page = params.get("page") || "overview";
+    state.activity.unshift({ name: user.name, account: user.account, action: "登入主框架", time: "2026-10-08 14:06", tag: "已驗證" });
+  }
+  if (params.get("sample") === "1" && !state.users.some(u => u.account === "HR01")) {
+    state.users.push({ account: "HR01", password: "HR01", name: "陳可恩", role: "HR", createdAt: "2026-10-08 11:20" });
+  }
+  render();
+}
+boot();
+</script>
+</body>
+</html>

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarDays, LayoutGrid, Users } from "lucide-react";
+import { Building2, CalendarDays, LayoutGrid, NotebookPen, Users } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { canManageUsers, daysInMonth } from "@/lib/office";
+import { canManageDepartments, canManageUsers, daysInMonth } from "@/lib/office";
 import { cn } from "@/lib/utils";
 import { useOffice } from "@/components/office-provider";
 
@@ -120,8 +120,38 @@ export function OverviewView() {
               <span className="rounded-full bg-[#fff1e4] px-2 py-0.5 text-[11px] font-semibold text-[#b86112]">僅 CEO</span>
             )}
           </div>
+          <div className="flex items-center justify-between gap-3 border-t border-[#f0f1f4] py-3">
+            <div>
+              <p className="flex items-center gap-1.5 text-sm">
+                <NotebookPen className="size-3.5" />
+                工作紀錄
+              </p>
+              <p className="text-xs text-[#8b919d]">只處理自己的紀錄。較高職位可查詢同部門較低職位。</p>
+            </div>
+            <Link href="/records" data-testid="open-records" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              進入
+            </Link>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-[#f0f1f4] py-3">
+            <div>
+              <p className="flex items-center gap-1.5 text-sm">
+                <Building2 className="size-3.5" />
+                部門與職位
+              </p>
+              <p className="text-xs text-[#8b919d]">
+                {canManageDepartments(session.role) ? "CEO 與 HR 可新增部門、職位並指派。" : "目前角色不可使用。"}
+              </p>
+            </div>
+            {canManageDepartments(session.role) ? (
+              <Link href="/departments" data-testid="open-departments" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+                進入
+              </Link>
+            ) : (
+              <span className="rounded-full bg-[#fff1e4] px-2 py-0.5 text-[11px] font-semibold text-[#b86112]">僅 CEO、HR</span>
+            )}
+          </div>
           <p className="rounded-xl border border-dashed border-[#d8dbe3] bg-[#f8fafc] px-3 py-2.5 text-xs leading-relaxed text-[#667085]">
-            不做：更改密碼、登出、角色指派畫面、個人事項、部門、審批路徑。
+            第二版不做次日通知，也不讓個別權限覆蓋職位順序。工作紀錄不從月視圖進入。更改密碼、登出、角色指派畫面、個人事項與審批路徑仍未納入。
           </p>
         </section>
       </div>

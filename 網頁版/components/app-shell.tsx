@@ -3,15 +3,17 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, LayoutGrid, Users } from "lucide-react";
-import { canManageUsers } from "@/lib/office";
+import { Building2, CalendarDays, LayoutGrid, NotebookPen, Users } from "lucide-react";
+import { canManageDepartments, canManageUsers } from "@/lib/office";
 import { useOffice } from "@/components/office-provider";
 import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/overview", group: "營運", label: "總覽", icon: LayoutGrid, testId: "nav-overview" },
   { href: "/calendar", group: "營運", label: "日曆", icon: CalendarDays, testId: "nav-calendar" },
+  { href: "/records", group: "營運", label: "工作紀錄", icon: NotebookPen, testId: "nav-records" },
   { href: "/users", group: "管理", label: "使用者", icon: Users, testId: "nav-users", ceoOnly: true },
+  { href: "/departments", group: "管理", label: "部門", icon: Building2, testId: "nav-departments", orgOnly: true },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -19,9 +21,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { session } = useOffice();
   if (!session) return null;
 
-  const visible = links.filter(
-    (link) => !("ceoOnly" in link && link.ceoOnly) || canManageUsers(session.role),
-  );
+  const visible = links.filter((link) => {
+    if ("ceoOnly" in link && link.ceoOnly) return canManageUsers(session.role);
+    if ("orgOnly" in link && link.orgOnly) return canManageDepartments(session.role);
+    return true;
+  });
   return (
     <div className="flex min-h-svh flex-col bg-[#f4f5f7] md:flex-row">
       <aside className="flex w-full shrink-0 flex-col border-b border-[#e6e8ee] bg-[#f7f8fa] px-3.5 py-4 md:min-h-svh md:w-[236px] md:border-r md:border-b-0">
@@ -31,7 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div>
             <p className="text-[15px] font-bold">小型辦公</p>
-            <p className="text-xs text-[#8b919d]">網頁版 · 第一版</p>
+            <p className="text-xs text-[#8b919d]">網頁版 · 第二版</p>
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto md:block" aria-label="主框架導覽">

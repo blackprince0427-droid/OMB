@@ -9,14 +9,40 @@ import {
   type ReactNode,
 } from "react";
 import {
+  addDepartment,
+  addPosition,
   addUser,
+  addWorkRecord,
+  assignMember,
   authenticate,
+  setStaffPermission,
   stamp,
+  updateWorkRecord,
+  type Assignment,
+  type Department,
   type OfficeUser,
+  type Position,
   type Role,
   type Session,
+  type StaffPermission,
+  type WorkRecord,
 } from "@/lib/office";
-import { loadSession, loadUsers, saveSession, saveUsers } from "@/lib/storage";
+import {
+  loadAssignments,
+  loadDepartments,
+  loadPermissions,
+  loadPositions,
+  loadRecords,
+  loadSession,
+  loadUsers,
+  saveAssignments,
+  saveDepartments,
+  savePermissions,
+  savePositions,
+  saveRecords,
+  saveSession,
+  saveUsers,
+} from "@/lib/storage";
 
 export type Activity = {
   name: string;
@@ -30,6 +56,11 @@ type OfficeContextValue = {
   users: OfficeUser[];
   session: Session | null;
   activity: Activity[];
+  departments: Department[];
+  positions: Position[];
+  assignments: Assignment[];
+  permissions: StaffPermission[];
+  records: WorkRecord[];
   login: (account: string, password: string) => string | null;
   createUser: (input: {
     name: string;
@@ -37,6 +68,12 @@ type OfficeContextValue = {
     password: string;
     role: Role;
   }) => string | null;
+  createDepartment: (name: string) => string | null;
+  createPosition: (input: { departmentId: string; name: string; rank: string }) => string | null;
+  assignToDepartment: (input: { account: string; departmentId: string; positionId: string }) => string | null;
+  saveStaffPermission: (account: string, note: string) => string | null;
+  createRecord: (input: { title: string; content: string }) => string | null;
+  editRecord: (id: string, input: { title: string; content: string }) => string | null;
 };
 
 const OfficeContext = createContext<OfficeContextValue | null>(null);
@@ -46,6 +83,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<OfficeUser[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [activity, setActivity] = useState<Activity[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [permissions, setPermissions] = useState<StaffPermission[]>([]);
+  const [records, setRecords] = useState<WorkRecord[]>([]);
 
   useEffect(() => {
     const storedUsers = loadUsers();
@@ -53,6 +95,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage and sessionStorage are not available during SSR
     setUsers(storedUsers);
     setSession(loadSession(storedUsers));
+    setDepartments(loadDepartments());
+    setPositions(loadPositions());
+    setAssignments(loadAssignments());
+    setPermissions(loadPermissions());
+    setRecords(loadRecords());
     setReady(true);
   }, []);
 
@@ -62,6 +109,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       users,
       session,
       activity,
+      departments,
+      positions,
+      assignments,
+      permissions,
+      records,
       login(account, password) {
         const user = authenticate(users, account, password);
         if (!user) return "帳戶或密碼不正確，未能進入主框架。";
@@ -96,8 +148,55 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         ]);
         return null;
       },
+      createDepartment(name) {
+        const result = addDepartment(departments, name, new Date());
+        if (!result.ok) return result.error;
+        const next = [...departments, result.value];
+        saveDepartments(next);
+        setDepartments(next);
+        return null;
+      },
+      createPosition(input) {
+        const result = addPosition(departments, positions, input, new Date());
+        if (!result.ok) return result.error;
+        const next = [...positions, result.value];
+        savePositions(next);
+        setPositions(next);
+        return null;
+      },
+      assignToDepartment(input) {
+        const result = assignMember(users, departments, positions, assignments, input);
+        if (!result.ok) return result.error;
+        saveAssignments(result.value);
+        setAssignments(result.value);
+        return null;
+      },
+      saveStaffPermission(account, note) {
+        const result = setStaffPermission(users, permissions, account, note);
+        if (!result.ok) return result.error;
+        savePermissions(result.value);
+        setPermissions(result.value);
+        return null;
+      },
+      createRecord(input) {
+        if (!session) return "未登入不得處理工作紀錄。";
+        const result = addWorkRecord(records, session.account, input, new Date());
+        if (!result.ok) return result.error;
+        const next = [result.value, ...records];
+        saveRecords(next);
+        setRecords(next);
+        return null;
+      },
+      editRecord(id, input) {
+        if (!session) return "未登入不得處理工作紀錄。";
+        const result = updateWorkRecord(records, session.account, id, input, new Date());
+        if (!result.ok) return result.error;
+        saveRecords(result.value);
+        setRecords(result.value);
+        return null;
+      },
     }),
-    [activity, ready, session, users],
+    [activity, assignments, departments, permissions, positions, ready, records, session, users],
   );
 
   return <OfficeContext.Provider value={value}>{children}</OfficeContext.Provider>;

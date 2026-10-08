@@ -8,6 +8,7 @@ import { useOffice } from "@/components/office-provider";
 export function FrameGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { ready, session } = useOffice();
+  void children;
 
   useEffect(() => {
     if (ready && !session) router.replace("/");
@@ -21,5 +22,5 @@ export function FrameGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <AppShell>{children}</AppShell>;
+  return <AppShell />;
 }

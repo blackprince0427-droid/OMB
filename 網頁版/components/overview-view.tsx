@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { Building2, CalendarDays, LayoutGrid, NotebookPen, Users } from "lucide-react";
+import { FrameLink } from "@/components/frame-nav";
 import { buttonVariants } from "@/components/ui/button";
 import { canManageDepartments, canManageUsers, daysInMonth } from "@/lib/office";
 import { cn } from "@/lib/utils";
@@ -38,9 +38,9 @@ export function OverviewView() {
               </p>
             </div>
           </div>
-          <Link href="/calendar" className={cn(buttonVariants({ variant: "outline" }))}>
+          <FrameLink href="/calendar" className={cn(buttonVariants({ variant: "outline" }))}>
             打開日曆
-          </Link>
+          </FrameLink>
         </div>
         <ol className="mt-4 grid grid-cols-2 gap-2 border-t border-[#f0f1f4] pt-4 md:grid-cols-4">
           {[
@@ -94,13 +94,13 @@ export function OverviewView() {
               <p className="text-sm">月視圖日曆</p>
               <p className="text-xs text-[#8b919d]">七欄、標示今天、上一月／下一月</p>
             </div>
-            <Link
+            <FrameLink
               href="/calendar"
               data-testid="open-calendar"
               className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             >
               進入
-            </Link>
+            </FrameLink>
           </div>
           <div className="flex items-center justify-between gap-3 py-3">
             <div>
@@ -113,9 +113,9 @@ export function OverviewView() {
               </p>
             </div>
             {canManageUsers(session.role) ? (
-              <Link href="/users" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              <FrameLink href="/users" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
                 進入
-              </Link>
+              </FrameLink>
             ) : (
               <span className="rounded-full bg-[#fff1e4] px-2 py-0.5 text-[11px] font-semibold text-[#b86112]">僅 CEO</span>
             )}
@@ -128,9 +128,9 @@ export function OverviewView() {
               </p>
               <p className="text-xs text-[#8b919d]">只處理自己的紀錄。較高職位可查詢同部門較低職位。</p>
             </div>
-            <Link href="/records" data-testid="open-records" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+            <FrameLink href="/records" data-testid="open-records" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
               進入
-            </Link>
+            </FrameLink>
           </div>
           <div className="flex items-center justify-between gap-3 border-t border-[#f0f1f4] py-3">
             <div>
@@ -143,9 +143,9 @@ export function OverviewView() {
               </p>
             </div>
             {canManageDepartments(session.role) ? (
-              <Link href="/departments" data-testid="open-departments" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              <FrameLink href="/departments" data-testid="open-departments" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
                 進入
-              </Link>
+              </FrameLink>
             ) : (
               <span className="rounded-full bg-[#fff1e4] px-2 py-0.5 text-[11px] font-semibold text-[#b86112]">僅 CEO、HR</span>
             )}

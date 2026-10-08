@@ -13,6 +13,10 @@ export function LoginScreen() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    router.prefetch("/overview");
+  }, [router]);
+
+  useEffect(() => {
     if (ready && session) router.replace("/overview");
   }, [ready, router, session]);
 

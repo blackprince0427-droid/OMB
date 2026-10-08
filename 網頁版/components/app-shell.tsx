@@ -1,22 +1,43 @@
 "use client";
 
-import type { ReactNode } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Building2, CalendarDays, LayoutGrid, NotebookPen, Users } from "lucide-react";
+import { CalendarView } from "@/components/calendar-view";
+import { DepartmentsView } from "@/components/departments-view";
+import { FrameLink, FrameNavProvider, type FrameScreen } from "@/components/frame-nav";
+import { OverviewView } from "@/components/overview-view";
+import { RecordsView } from "@/components/records-view";
+import { UsersView } from "@/components/users-view";
 import { canManageDepartments, canManageUsers } from "@/lib/office";
 import { useOffice } from "@/components/office-provider";
 import { cn } from "@/lib/utils";
 
-const links = [
-  { href: "/overview", group: "營運", label: "總覽", icon: LayoutGrid, testId: "nav-overview" },
-  { href: "/calendar", group: "營運", label: "日曆", icon: CalendarDays, testId: "nav-calendar" },
-  { href: "/records", group: "營運", label: "工作紀錄", icon: NotebookPen, testId: "nav-records" },
-  { href: "/users", group: "管理", label: "使用者", icon: Users, testId: "nav-users", ceoOnly: true },
-  { href: "/departments", group: "管理", label: "部門", icon: Building2, testId: "nav-departments", orgOnly: true },
-] as const;
+const links: {
+  href: string;
+  screen: FrameScreen;
+  group: string;
+  label: string;
+  icon: typeof LayoutGrid;
+  testId: string;
+  ceoOnly?: boolean;
+  orgOnly?: boolean;
+}[] = [
+  { href: "/overview", screen: "overview", group: "營運", label: "總覽", icon: LayoutGrid, testId: "nav-overview" },
+  { href: "/calendar", screen: "calendar", group: "營運", label: "日曆", icon: CalendarDays, testId: "nav-calendar" },
+  { href: "/records", screen: "records", group: "營運", label: "工作紀錄", icon: NotebookPen, testId: "nav-records" },
+  { href: "/users", screen: "users", group: "管理", label: "使用者", icon: Users, testId: "nav-users", ceoOnly: true },
+  { href: "/departments", screen: "departments", group: "管理", label: "部門", icon: Building2, testId: "nav-departments", orgOnly: true },
+];
 
-export function AppShell({ children }: { children: ReactNode }) {
+const screens: Record<FrameScreen, typeof OverviewView> = {
+  overview: OverviewView,
+  calendar: CalendarView,
+  records: RecordsView,
+  users: UsersView,
+  departments: DepartmentsView,
+};
+
+export function AppShell() {
   const pathname = usePathname();
   const { session } = useOffice();
   if (!session) return null;
@@ -26,6 +47,23 @@ export function AppShell({ children }: { children: ReactNode }) {
     if ("orgOnly" in link && link.orgOnly) return canManageDepartments(session.role);
     return true;
   });
+  return (
+    <FrameNavProvider initialPath={pathname}>
+      {(screen) => <ShellFrame screen={screen} visible={visible} />}
+    </FrameNavProvider>
+  );
+}
+
+function ShellFrame({
+  screen,
+  visible,
+}: {
+  screen: FrameScreen;
+  visible: typeof links;
+}) {
+  const { session } = useOffice();
+  const Screen = screens[screen];
+  if (!session) return null;
   return (
     <div className="flex min-h-svh flex-col bg-[#f4f5f7] md:flex-row">
       <aside className="flex w-full shrink-0 flex-col border-b border-[#e6e8ee] bg-[#f7f8fa] px-3.5 py-4 md:min-h-svh md:w-[236px] md:border-r md:border-b-0">
@@ -41,7 +79,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className="flex gap-1 overflow-x-auto md:block" aria-label="主框架導覽">
           {visible.map((link, index) => {
             const group = index === 0 || visible[index - 1].group !== link.group ? link.group : "";
-            const active = pathname === link.href;
+            const active = screen === link.screen;
             const Icon = link.icon;
             return (
               <div key={link.href} className="md:contents">
@@ -50,7 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     {group}
                   </p>
                 ) : null}
-                <Link
+                <FrameLink
                   href={link.href}
                   data-testid={link.testId}
                   className={cn(
@@ -60,7 +98,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 >
                   <Icon className="size-4" />
                   {link.label}
-                </Link>
+                </FrameLink>
               </div>
             );
           })}
@@ -84,7 +122,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             已登入 · 主框架
           </span>
         </div>
-        <div className="px-4 pb-8 md:px-7">{children}</div>
+        <div className="px-4 pb-8 md:px-7">
+          <Screen />
+        </div>
       </section>
     </div>
   );

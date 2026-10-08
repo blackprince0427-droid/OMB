@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "小型辦公軟件 · 網頁版",
-  description: "網頁版第一版：登入、主框架、月視圖日曆，以及 CEO 新增使用者。",
+  description: "網頁版：登入、主框架、日曆、部門職位與工作紀錄。",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

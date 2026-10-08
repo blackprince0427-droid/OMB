@@ -2,13 +2,15 @@
 
 import { createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from "react";
 
-export type FrameScreen = "overview" | "calendar" | "records" | "users" | "departments";
+export type FrameScreen = "overview" | "calendar" | "records" | "pending" | "account" | "users" | "departments";
 
 const FrameNavContext = createContext<(href: string) => void>(() => {});
 
 export function screenFromPath(path: string): FrameScreen {
   if (path.startsWith("/calendar")) return "calendar";
   if (path.startsWith("/records")) return "records";
+  if (path.startsWith("/pending")) return "pending";
+  if (path.startsWith("/account")) return "account";
   if (path.startsWith("/users")) return "users";
   if (path.startsWith("/departments")) return "departments";
   return "overview";

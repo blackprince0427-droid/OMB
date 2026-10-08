@@ -15,6 +15,10 @@ import {
   addWorkRecord,
   assignMember,
   authenticate,
+  canManageDepartments,
+  changePassword,
+  changePosition,
+  completeWorkRecord,
   setStaffPermission,
   stamp,
   updateWorkRecord,
@@ -72,8 +76,12 @@ type OfficeContextValue = {
   createPosition: (input: { departmentId: string; name: string; rank: string }) => string | null;
   assignToDepartment: (input: { account: string; departmentId: string; positionId: string }) => string | null;
   saveStaffPermission: (account: string, note: string) => string | null;
-  createRecord: (input: { title: string; content: string }) => string | null;
+  changeOwnPassword: (oldPassword: string, newPassword: string) => string | null;
+  logout: () => void;
+  changeMemberPosition: (input: { account: string; departmentId: string; positionId: string }) => string | null;
+  createRecord: (input: { title: string; content: string; workDate?: string }) => string | null;
   editRecord: (id: string, input: { title: string; content: string }) => string | null;
+  completeRecord: (id: string) => string | null;
 };
 
 const OfficeContext = createContext<OfficeContextValue | null>(null);
@@ -178,6 +186,26 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         setPermissions(result.value);
         return null;
       },
+      changeOwnPassword(oldPassword, newPassword) {
+        if (!session) return "未登入不得更改密碼。";
+        const result = changePassword(users, session.account, oldPassword, newPassword);
+        if (!result.ok) return result.error;
+        saveUsers(result.value);
+        setUsers(result.value);
+        return null;
+      },
+      logout() {
+        saveSession(null);
+        setSession(null);
+      },
+      changeMemberPosition(input) {
+        if (!session || !canManageDepartments(session.role)) return "沒有權限更改職位。";
+        const result = changePosition(positions, assignments, input);
+        if (!result.ok) return result.error;
+        saveAssignments(result.value);
+        setAssignments(result.value);
+        return null;
+      },
       createRecord(input) {
         if (!session) return "未登入不得處理工作紀錄。";
         const result = addWorkRecord(records, session.account, input, new Date());
@@ -190,6 +218,14 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       editRecord(id, input) {
         if (!session) return "未登入不得處理工作紀錄。";
         const result = updateWorkRecord(records, session.account, id, input, new Date());
+        if (!result.ok) return result.error;
+        saveRecords(result.value);
+        setRecords(result.value);
+        return null;
+      },
+      completeRecord(id) {
+        if (!session) return "未登入不得處理工作紀錄。";
+        const result = completeWorkRecord(records, session.account, id, new Date());
         if (!result.ok) return result.error;
         saveRecords(result.value);
         setRecords(result.value);

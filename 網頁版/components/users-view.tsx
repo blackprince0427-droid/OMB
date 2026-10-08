@@ -149,7 +149,7 @@ export function UsersView() {
             <Button type="submit">新增</Button>
           </form>
           <p className="mt-3 rounded-xl border border-dashed border-[#d8dbe3] bg-[#f8fafc] px-3 py-2.5 text-xs leading-relaxed text-[#667085]">
-            角色區分 CEO、HR、會計、員工。指派畫面、審批分配與更改密碼不在第一版。
+            角色區分 CEO、HR、會計、員工。角色只在建立時寫入。更改自己的密碼在「帳戶」。
           </p>
         </section>
       </div>

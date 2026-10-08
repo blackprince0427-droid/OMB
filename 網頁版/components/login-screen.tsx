@@ -90,7 +90,7 @@ export function LoginScreen() {
           </Button>
         </form>
         <p className="mt-3.5 text-xs leading-relaxed text-[#8b919d]">
-          驗收對照：帳戶 CEO、密碼 CEO 可登入；錯誤密碼停留於此頁。更改密碼與登出方式未確認，本版不提供。
+          驗收對照：帳戶 CEO、密碼 CEO 可登入；錯誤密碼停留於此頁。登入後可在「帳戶」更改自己的密碼，並可登出返回此頁。
         </p>
       </section>
     </main>

@@ -52,6 +52,11 @@ export function stamp(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+export function dateStamp(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 export function authenticate(
   users: OfficeUser[],
   account: string,
@@ -188,8 +193,12 @@ export type WorkRecord = {
   account: string;
   title: string;
   content: string;
+  workDate: string;
+  done: boolean;
   updatedAt: string;
 };
+
+export const RECORD_PAGE_SIZE = 10;
 
 let idSequence = 0;
 
@@ -333,14 +342,54 @@ export function canQueryAccount(
   return false;
 }
 
+export function changePassword(
+  users: OfficeUser[],
+  account: string,
+  oldPassword: string,
+  newPassword: string,
+): NamedResult<OfficeUser[]> {
+  const user = users.find((item) => item.account === account);
+  if (!user) return { ok: false, error: "未登入不得更改密碼。" };
+  if (user.password !== oldPassword) return { ok: false, error: "舊密碼不正確。" };
+  if (!newPassword) return { ok: false, error: "新密碼須填寫。" };
+  return {
+    ok: true,
+    value: users.map((item) => (item.account === account ? { ...item, password: newPassword } : item)),
+  };
+}
+
+export function changePosition(
+  positions: Position[],
+  assignments: Assignment[],
+  input: { account: string; departmentId: string; positionId: string },
+): NamedResult<Assignment[]> {
+  const current = assignments.find(
+    (item) => item.account === input.account && item.departmentId === input.departmentId,
+  );
+  if (!current) return { ok: false, error: "請指定此帳戶已屬的部門。" };
+  const position = positions.find((item) => item.id === input.positionId);
+  if (!position || position.departmentId !== input.departmentId) {
+    return { ok: false, error: "請選擇該部門的職位。" };
+  }
+  return {
+    ok: true,
+    value: assignments.map((item) =>
+      item.account === input.account && item.departmentId === input.departmentId
+        ? { ...item, positionId: position.id }
+        : item,
+    ),
+  };
+}
+
 export function addWorkRecord(
   records: WorkRecord[],
   account: string,
-  input: { title: string; content: string },
+  input: { title: string; content: string; workDate?: string },
   now: Date,
 ): NamedResult<WorkRecord> {
   const title = input.title.trim();
   if (!title) return { ok: false, error: "工作紀錄標題須填寫。" };
+  const workDate = input.workDate && /^\d{4}-\d{2}-\d{2}$/.test(input.workDate) ? input.workDate : dateStamp(now);
   return {
     ok: true,
     value: {
@@ -348,6 +397,8 @@ export function addWorkRecord(
       account,
       title,
       content: input.content.trim(),
+      workDate,
+      done: false,
       updatedAt: stamp(now),
     },
   };
@@ -374,4 +425,72 @@ export function updateWorkRecord(
         : item,
     ),
   };
+}
+
+export function completeWorkRecord(
+  records: WorkRecord[],
+  actor: string,
+  id: string,
+  now: Date,
+): NamedResult<WorkRecord[]> {
+  const current = records.find((item) => item.id === id);
+  if (!current || current.account !== actor) {
+    return { ok: false, error: "只能把自己的工作紀錄標為已完成。" };
+  }
+  return {
+    ok: true,
+    value: records.map((item) =>
+      item.id === id ? { ...item, done: true, updatedAt: stamp(now) } : item,
+    ),
+  };
+}
+
+export function recordsForAccount(records: WorkRecord[], account: string, workDate = ""): WorkRecord[] {
+  return records.filter((item) => {
+    if (item.account !== account) return false;
+    if (workDate && item.workDate !== workDate) return false;
+    return true;
+  });
+}
+
+export function unfinishedRecords(records: WorkRecord[], account: string): WorkRecord[] {
+  return records.filter((item) => item.account === account && !item.done);
+}
+
+export function normalizeWorkRecord(value: unknown): WorkRecord | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Partial<WorkRecord>;
+  if (
+    typeof item.id !== "string" ||
+    typeof item.account !== "string" ||
+    typeof item.title !== "string" ||
+    typeof item.content !== "string" ||
+    typeof item.updatedAt !== "string"
+  ) {
+    return null;
+  }
+  const workDate =
+    typeof item.workDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.workDate)
+      ? item.workDate
+      : item.updatedAt.slice(0, 10);
+  return {
+    id: item.id,
+    account: item.account,
+    title: item.title,
+    content: item.content,
+    workDate,
+    done: item.done === true,
+    updatedAt: item.updatedAt,
+  };
+}
+
+export function pageOf<T>(items: T[], page: number, size = RECORD_PAGE_SIZE): {
+  items: T[];
+  page: number;
+  pageCount: number;
+} {
+  const pageCount = Math.max(1, Math.ceil(items.length / size));
+  const current = Math.min(Math.max(page, 1), pageCount);
+  const start = (current - 1) * size;
+  return { items: items.slice(start, start + size), page: current, pageCount };
 }

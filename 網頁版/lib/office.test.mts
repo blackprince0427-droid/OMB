@@ -10,13 +10,22 @@ import {
   canManageDepartments,
   canManageUsers,
   canQueryAccount,
+  changePassword,
+  changePosition,
+  completeWorkRecord,
+  dateStamp,
   daysInMonth,
   monthMatrix,
+  normalizeWorkRecord,
+  pageOf,
+  recordsForAccount,
   seedUsers,
   setStaffPermission,
+  unfinishedRecords,
   updateWorkRecord,
   type Assignment,
   type Position,
+  type WorkRecord,
 } from "./office.ts";
 
 const now = new Date(2026, 9, 8, 14, 6);
@@ -158,10 +167,6 @@ test("部門、職位與一人多部門指派", () => {
 });
 
 test("同一部門較高職位才可查詢，個別權限不改變查詢", () => {
-  const departments = [
-    { id: "d1", name: "會計部", createdAt: "" },
-    { id: "d2", name: "業務部", createdAt: "" },
-  ];
   const positions: Position[] = [
     { id: "p-high", departmentId: "d1", name: "主任", rank: 2, createdAt: "" },
     { id: "p-low", departmentId: "d1", name: "職員", rank: 1, createdAt: "" },
@@ -212,6 +217,109 @@ test("工作紀錄只可由本人修改", () => {
   if (!edited.ok) return;
   assert.equal(edited.value[0]?.title, "對帳完成");
   assert.equal(edited.value[0]?.account, "HR01");
+});
+
+test("更改密碼要對上舊密碼，新密碼原樣保存", () => {
+  const users = seedUsers();
+  assert.equal(changePassword(users, "CEO", "wrong", "next").ok, false);
+  assert.equal(changePassword(users, "CEO", "CEO", "").ok, false);
+  const spaced = changePassword(users, "CEO", "CEO", " CEO ");
+  assert.equal(spaced.ok, true);
+  if (!spaced.ok) return;
+  assert.equal(spaced.value[0]?.password, " CEO ");
+  assert.equal(authenticate(spaced.value, "CEO", " CEO ")?.account, "CEO");
+  assert.equal(changePassword(users, "CEO", "CEO", "CEO").ok, true);
+});
+
+test("更改職位只替換已屬部門，查詢範圍跟著變", () => {
+  const positions: Position[] = [
+    { id: "p-high", departmentId: "d1", name: "主任", rank: 2, createdAt: "" },
+    { id: "p-low", departmentId: "d1", name: "職員", rank: 1, createdAt: "" },
+    { id: "p-top", departmentId: "d1", name: "經理", rank: 3, createdAt: "" },
+    { id: "p-sales-low", departmentId: "d2", name: "職員", rank: 1, createdAt: "" },
+  ];
+  const assignments: Assignment[] = [
+    { account: "LEAD", departmentId: "d1", positionId: "p-high" },
+    { account: "CLERK", departmentId: "d1", positionId: "p-low" },
+  ];
+  const outside = changePosition(positions, assignments, {
+    account: "CLERK",
+    departmentId: "d2",
+    positionId: "p-sales-low",
+  });
+  assert.equal(outside.ok, false);
+  assert.equal(assignments.length, 2);
+
+  const raised = changePosition(positions, assignments, {
+    account: "CLERK",
+    departmentId: "d1",
+    positionId: "p-top",
+  });
+  assert.equal(raised.ok, true);
+  if (!raised.ok) return;
+  assert.equal(raised.value.filter((item) => item.account === "CLERK").length, 1);
+  assert.equal(canQueryAccount(raised.value, positions, "LEAD", "CLERK"), false);
+  assert.equal(canQueryAccount(raised.value, positions, "CLERK", "LEAD"), true);
+});
+
+test("工作紀錄按 10 筆分頁，日期搜尋只留當天", () => {
+  let records: WorkRecord[] = [];
+  for (let index = 0; index < 11; index += 1) {
+    const created = addWorkRecord(
+      [],
+      "CEO",
+      { title: `同日${index}`, content: "", workDate: "2026-10-08" },
+      now,
+    );
+    assert.equal(created.ok, true);
+    if (!created.ok) return;
+    records = [created.value, ...records];
+  }
+  const other = addWorkRecord([], "CEO", { title: "另一天", content: "", workDate: "2026-10-07" }, now);
+  assert.equal(other.ok, true);
+  if (!other.ok) return;
+  records = [other.value, ...records];
+
+  const sameDay = recordsForAccount(records, "CEO", "2026-10-08");
+  assert.equal(sameDay.length, 11);
+  assert.equal(pageOf(sameDay, 1).items.length, 10);
+  assert.equal(pageOf(sameDay, 2).items.length, 1);
+  assert.equal(pageOf(sameDay, 2).pageCount, 2);
+  assert.equal(recordsForAccount(records, "CEO").length, 12);
+  assert.equal(recordsForAccount(records, "CEO")[0]?.title, "另一天");
+});
+
+test("標為已完成後離開未完成清單，工作紀錄仍在", () => {
+  const created = addWorkRecord([], "HR01", { title: "未完成", content: "待辦" }, now);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  assert.equal(created.value.done, false);
+  assert.equal(created.value.workDate, dateStamp(now));
+  const blocked = completeWorkRecord([created.value], "CEO", created.value.id, now);
+  assert.equal(blocked.ok, false);
+  const done = completeWorkRecord([created.value], "HR01", created.value.id, now);
+  assert.equal(done.ok, true);
+  if (!done.ok) return;
+  assert.equal(unfinishedRecords(done.value, "HR01").length, 0);
+  assert.equal(done.value.length, 1);
+  assert.equal(done.value[0]?.done, true);
+  const edited = updateWorkRecord(done.value, "HR01", created.value.id, { title: "仍完成", content: "" }, now);
+  assert.equal(edited.ok, true);
+  if (!edited.ok) return;
+  assert.equal(edited.value[0]?.done, true);
+  assert.equal(edited.value[0]?.workDate, "2026-10-08");
+});
+
+test("舊工作紀錄補上日期與未完成", () => {
+  const record = normalizeWorkRecord({
+    id: "old",
+    account: "CEO",
+    title: "舊紀錄",
+    content: "",
+    updatedAt: "2026-10-01 09:30",
+  });
+  assert.equal(record?.workDate, "2026-10-01");
+  assert.equal(record?.done, false);
 });
 
 test("月視圖由星期日開始，並鋪滿當月", () => {

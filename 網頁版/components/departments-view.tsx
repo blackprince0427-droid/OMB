@@ -44,6 +44,7 @@ export function DepartmentsView() {
     createDepartment,
     createPosition,
     assignToDepartment,
+    changeMemberPosition,
     saveStaffPermission,
   } = useOffice();
   const [departmentId, setDepartmentId] = useState("");
@@ -59,6 +60,11 @@ export function DepartmentsView() {
   const [assignOk, setAssignOk] = useState("");
   const [permError, setPermError] = useState("");
   const [permOk, setPermOk] = useState("");
+  const [moveAccount, setMoveAccount] = useState("");
+  const [moveDepartmentId, setMoveDepartmentId] = useState("");
+  const [movePositionId, setMovePositionId] = useState("");
+  const [moveError, setMoveError] = useState("");
+  const [moveOk, setMoveOk] = useState("");
 
   const departmentItems = useMemo(
     () => departments.map((item) => ({ value: item.id, label: item.name })),
@@ -70,6 +76,15 @@ export function DepartmentsView() {
   );
   const positionsInAssign = positions.filter((item) => item.departmentId === assignDepartmentId);
   const positionItems = positionsInAssign.map((item) => ({
+    value: item.id,
+    label: `${item.name} · 順序 ${item.rank}`,
+  }));
+  const memberDepartments = departments.filter((department) =>
+    assignments.some((item) => item.account === moveAccount && item.departmentId === department.id),
+  );
+  const memberDepartmentItems = memberDepartments.map((item) => ({ value: item.id, label: item.name }));
+  const movePositions = positions.filter((item) => item.departmentId === moveDepartmentId);
+  const movePositionItems = movePositions.map((item) => ({
     value: item.id,
     label: `${item.name} · 順序 ${item.rank}`,
   }));
@@ -94,7 +109,7 @@ export function DepartmentsView() {
         <div>
           <h1 className="text-[22px] font-bold">部門</h1>
           <p className="text-[13px] text-muted-foreground">
-            CEO 與 HR 可新增部門、在部門內新增職位，並為帳戶指定部門與職位。一人可屬多個部門，每個部門一個職位。
+            CEO 與 HR 可新增部門、在部門內新增職位，並為帳戶指定部門與職位。一人可屬多個部門，每個部門一個職位。更改職位須指定該帳戶已屬的部門，查詢範圍在儲存後立即按新職位計算。
           </p>
         </div>
       </div>
@@ -305,6 +320,105 @@ export function DepartmentsView() {
               })
             )}
           </ul>
+        </section>
+
+        <section className="rounded-2xl border border-[#e6e8ee] bg-white p-4">
+          <h2 className="mb-3 text-[15px] font-semibold">更改職位</h2>
+          <p className="mb-3 text-xs leading-relaxed text-[#667085]">
+            指定此帳戶已經所屬的部門，並改為該部門的另一個職位。儲存後，查詢範圍按新職位立即計算。要把帳戶加進新部門，請用「指派部門與職位」。
+          </p>
+          <Notice error={moveError} ok={moveOk} errorId="move-error" okId="move-ok" />
+          <form
+            data-testid="move-form"
+            className="space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const message = changeMemberPosition({
+                account: moveAccount,
+                departmentId: moveDepartmentId,
+                positionId: movePositionId,
+              });
+              if (message) {
+                setMoveOk("");
+                setMoveError(message);
+                return;
+              }
+              setMoveError("");
+              setMoveOk("已更改該部門的職位。查詢範圍已按新職位計算。");
+            }}
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="move-user">帳戶</Label>
+              <Select
+                items={userItems}
+                value={moveAccount}
+                onValueChange={(value) => {
+                  setMoveAccount(value ?? "");
+                  setMoveDepartmentId("");
+                  setMovePositionId("");
+                }}
+              >
+                <SelectTrigger id="move-user" data-testid="move-user" className="h-10 w-full">
+                  <SelectValue placeholder="選擇帳戶" />
+                </SelectTrigger>
+                <SelectContent>
+                  {userItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {moveAccount && memberDepartmentItems.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">此帳戶尚未指派部門。請先用指派加入部門。</p>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="move-dept">已屬部門</Label>
+                  <Select
+                    items={memberDepartmentItems}
+                    value={moveDepartmentId}
+                    onValueChange={(value) => {
+                      setMoveDepartmentId(value ?? "");
+                      setMovePositionId("");
+                    }}
+                  >
+                    <SelectTrigger id="move-dept" data-testid="move-dept" className="h-10 w-full">
+                      <SelectValue placeholder="選擇已屬部門" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {memberDepartmentItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="move-pos">職位</Label>
+                  <Select
+                    items={movePositionItems}
+                    value={movePositionId}
+                    onValueChange={(value) => setMovePositionId(value ?? "")}
+                  >
+                    <SelectTrigger id="move-pos" data-testid="move-pos" className="h-10 w-full">
+                      <SelectValue placeholder="選擇職位" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {movePositionItems.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+            <Button type="submit">更改職位</Button>
+          </form>
         </section>
 
         <section className="rounded-2xl border border-[#e6e8ee] bg-white p-4">

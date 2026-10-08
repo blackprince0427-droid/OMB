@@ -6,6 +6,7 @@ import {
   type OfficeUser,
   type Position,
   type Session,
+  normalizeWorkRecord,
   type StaffPermission,
   type WorkRecord,
 } from "@/lib/office";
@@ -110,18 +111,6 @@ function isPermission(value: unknown): value is StaffPermission {
   return typeof item.account === "string" && typeof item.note === "string" && item.note.trim().length > 0;
 }
 
-function isRecord(value: unknown): value is WorkRecord {
-  if (!value || typeof value !== "object") return false;
-  const item = value as Partial<WorkRecord>;
-  return (
-    typeof item.id === "string" &&
-    typeof item.account === "string" &&
-    typeof item.title === "string" &&
-    typeof item.content === "string" &&
-    typeof item.updatedAt === "string"
-  );
-}
-
 export function loadDepartments(): Department[] {
   return readList(DEPARTMENTS_KEY, isDepartment);
 }
@@ -155,7 +144,19 @@ export function savePermissions(permissions: StaffPermission[]): void {
 }
 
 export function loadRecords(): WorkRecord[] {
-  return readList(RECORDS_KEY, isRecord);
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(RECORDS_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item) => {
+      const record = normalizeWorkRecord(item);
+      return record ? [record] : [];
+    });
+  } catch {
+    return [];
+  }
 }
 
 export function saveRecords(records: WorkRecord[]): void {

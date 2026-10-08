@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CalendarDays, LayoutGrid, NotebookPen, Users } from "lucide-react";
+import { Building2, CalendarDays, KeyRound, LayoutGrid, ListChecks, NotebookPen, Users } from "lucide-react";
 import { FrameLink } from "@/components/frame-nav";
 import { buttonVariants } from "@/components/ui/button";
 import { canManageDepartments, canManageUsers, daysInMonth } from "@/lib/office";
@@ -135,6 +135,30 @@ export function OverviewView() {
           <div className="flex items-center justify-between gap-3 border-t border-[#f0f1f4] py-3">
             <div>
               <p className="flex items-center gap-1.5 text-sm">
+                <ListChecks className="size-3.5" />
+                未完成工作
+              </p>
+              <p className="text-xs text-[#8b919d]">只看自己未完成的項目。完成後離開該頁，仍留在工作紀錄。</p>
+            </div>
+            <FrameLink href="/pending" data-testid="open-pending" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              進入
+            </FrameLink>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-[#f0f1f4] py-3">
+            <div>
+              <p className="flex items-center gap-1.5 text-sm">
+                <KeyRound className="size-3.5" />
+                帳戶
+              </p>
+              <p className="text-xs text-[#8b919d]">更改自己的密碼，或登出返回登入頁。</p>
+            </div>
+            <FrameLink href="/account" data-testid="open-account" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              進入
+            </FrameLink>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-[#f0f1f4] py-3">
+            <div>
+              <p className="flex items-center gap-1.5 text-sm">
                 <Building2 className="size-3.5" />
                 部門與職位
               </p>
@@ -151,7 +175,7 @@ export function OverviewView() {
             )}
           </div>
           <p className="rounded-xl border border-dashed border-[#d8dbe3] bg-[#f8fafc] px-3 py-2.5 text-xs leading-relaxed text-[#667085]">
-            第二版不做次日通知，也不讓個別權限覆蓋職位順序。工作紀錄不從月視圖進入。更改密碼、登出、角色指派畫面、個人事項與審批路徑仍未納入。
+            第三版不做次日通知，也不讓個別權限覆蓋職位順序。工作紀錄不從月視圖進入。角色指派畫面、個人事項與審批路徑仍未納入。
           </p>
         </section>
       </div>

@@ -45,14 +45,14 @@ const screens: Record<FrameScreen, typeof OverviewView> = {
 
 export function AppShell() {
   const pathname = usePathname();
-  const { session } = useOffice();
+  const { session, companyBase } = useOffice();
   if (!session) return null;
 
   const visible = links.filter((link) => {
     if ("ceoOnly" in link && link.ceoOnly) return canManageUsers(session.role);
     if ("orgOnly" in link && link.orgOnly) return canManageDepartments(session.role);
     return true;
-  });
+  }).map((link) => ({ ...link, href: `${companyBase}${link.href}` }));
   return (
     <FrameNavProvider initialPath={pathname}>
       {(screen) => <ShellFrame screen={screen} visible={visible} />}
@@ -79,7 +79,7 @@ function ShellFrame({
           </div>
           <div>
             <p className="text-[15px] font-bold">小型辦公</p>
-            <p className="text-xs text-[#8b919d]">網頁版 · 第三版</p>
+            <p className="text-xs text-[#8b919d]">網頁版 · 第四版</p>
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto md:block" aria-label="主框架導覽">

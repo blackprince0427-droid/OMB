@@ -5,16 +5,23 @@ import {
   addPosition,
   addUser,
   addWorkRecord,
+  appendOperationLog,
   assignMember,
   authenticate,
   canManageDepartments,
   canManageUsers,
   canQueryAccount,
   changePassword,
+  companyIdFromPath,
+  createCompany,
+  defaultCompany,
+  disableCompany,
+  emptyBundle,
   changePosition,
   completeWorkRecord,
   dateStamp,
   daysInMonth,
+  logsForCompany,
   monthMatrix,
   normalizeWorkRecord,
   pageOf,
@@ -320,6 +327,58 @@ test("舊工作紀錄補上日期與未完成", () => {
   });
   assert.equal(record?.workDate, "2026-10-01");
   assert.equal(record?.done, false);
+});
+
+test("只限後台建立公司，新公司沒有預設帳戶", () => {
+  const companies = [defaultCompany()];
+  assert.equal(createCompany(companies, { name: " ", website: "https://a.example" }, now).ok, false);
+  assert.equal(createCompany(companies, { name: "甲公司", website: " " }, now).ok, false);
+  const created = createCompany(companies, { name: " 甲公司 ", website: " https://a.example " }, now);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  assert.equal(created.value.name, "甲公司");
+  assert.equal(created.value.website, "https://a.example");
+  assert.equal(created.value.disabled, false);
+  const fresh = emptyBundle();
+  assert.equal(fresh.users.length, 0);
+  assert.equal(fresh.records.length, 0);
+  const duplicate = createCompany([created.value], { name: "甲公司", website: "https://b.example" }, now);
+  assert.equal(duplicate.ok, false);
+  const sameSite = createCompany([created.value], { name: "乙公司", website: "https://a.example" }, now);
+  assert.equal(sameSite.ok, false);
+});
+
+test("停用公司保留公司本身，該公司帳戶不得再登入", () => {
+  const created = createCompany([defaultCompany()], { name: "甲公司", website: "https://a.example" }, now);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  const companies = [defaultCompany(), created.value];
+  const disabled = disableCompany(companies, "甲公司");
+  assert.equal(disabled.ok, true);
+  if (!disabled.ok) return;
+  assert.equal(disabled.value.length, 2);
+  assert.equal(disabled.value.find((item) => item.name === "甲公司")?.disabled, true);
+  assert.equal(disabled.value.find((item) => item.name === "預設公司")?.disabled, false);
+  assert.equal(disableCompany(disabled.value, "甲公司").ok, false);
+  assert.equal(disableCompany(disabled.value, "沒有這家").ok, false);
+  const users = seedUsers();
+  assert.equal(authenticate(users, "CEO", "CEO")?.account, "CEO");
+  assert.equal(authenticate([], "CEO", "CEO"), null);
+});
+
+test("不同公司的日誌不得互通", () => {
+  const first = appendOperationLog([], { companyId: "a", actor: "開發者後台", action: "建立公司" }, now);
+  const both = appendOperationLog(first, { companyId: "b", actor: "開發者後台", action: "停用公司" }, now);
+  assert.equal(logsForCompany(both, "a").length, 1);
+  assert.equal(logsForCompany(both, "a")[0]?.action, "建立公司");
+  assert.equal(logsForCompany(both, "b")[0]?.action, "停用公司");
+  assert.equal(logsForCompany(both, "c").length, 0);
+});
+
+test("公司網站與後台的路徑分開", () => {
+  assert.equal(companyIdFromPath("/overview"), "default");
+  assert.equal(companyIdFromPath("/console"), null);
+  assert.equal(companyIdFromPath("/s/acme/records"), "acme");
 });
 
 test("月視圖由星期日開始，並鋪滿當月", () => {

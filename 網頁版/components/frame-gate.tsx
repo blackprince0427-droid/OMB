@@ -7,12 +7,12 @@ import { useOffice } from "@/components/office-provider";
 
 export function FrameGate({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { ready, session } = useOffice();
+  const { ready, session, companyBase } = useOffice();
   void children;
 
   useEffect(() => {
-    if (ready && !session) router.replace("/");
-  }, [ready, router, session]);
+    if (ready && !session) router.replace(companyBase || "/");
+  }, [companyBase, ready, router, session]);
 
   if (!ready || !session) {
     return (

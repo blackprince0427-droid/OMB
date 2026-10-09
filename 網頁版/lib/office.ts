@@ -14,6 +14,34 @@ export type Session = {
   account: string;
   name: string;
   role: Role;
+  companyId: string;
+};
+
+export const DEFAULT_COMPANY_ID = "default";
+
+export type Company = {
+  id: string;
+  name: string;
+  website: string;
+  disabled: boolean;
+  createdAt: string;
+};
+
+export type CompanyBundle = {
+  users: OfficeUser[];
+  departments: Department[];
+  positions: Position[];
+  assignments: Assignment[];
+  permissions: StaffPermission[];
+  records: WorkRecord[];
+};
+
+export type OperationLog = {
+  id: string;
+  companyId: string;
+  actor: string;
+  action: string;
+  at: string;
 };
 
 export type CalendarCell = {
@@ -493,4 +521,97 @@ export function pageOf<T>(items: T[], page: number, size = RECORD_PAGE_SIZE): {
   const current = Math.min(Math.max(page, 1), pageCount);
   const start = (current - 1) * size;
   return { items: items.slice(start, start + size), page: current, pageCount };
+}
+
+export function defaultCompany(): Company {
+  return {
+    id: DEFAULT_COMPANY_ID,
+    name: "預設公司",
+    website: "",
+    disabled: false,
+    createdAt: "2026-10-08 09:00",
+  };
+}
+
+export function emptyBundle(): CompanyBundle {
+  return {
+    users: [],
+    departments: [],
+    positions: [],
+    assignments: [],
+    permissions: [],
+    records: [],
+  };
+}
+
+export function isConsolePath(path: string): boolean {
+  return path === "/console" || path.startsWith("/console/");
+}
+
+export function companyBaseFromPath(path: string): string {
+  const match = /^\/s\/[^/]+/.exec(path);
+  return match ? match[0] : "";
+}
+
+export function companyIdFromPath(path: string): string | null {
+  if (isConsolePath(path)) return null;
+  const match = /^\/s\/([^/]+)/.exec(path);
+  if (!match?.[1]) return DEFAULT_COMPANY_ID;
+  return decodeURIComponent(match[1]);
+}
+
+export function createCompany(
+  companies: Company[],
+  input: { name: string; website: string },
+  now: Date,
+): NamedResult<Company> {
+  const name = input.name.trim();
+  const website = input.website.trim();
+  if (!name) return { ok: false, error: "公司名稱須填寫。" };
+  if (!website) return { ok: false, error: "網站須填寫。" };
+  if (companies.some((item) => item.name === name)) return { ok: false, error: "此公司名稱已存在。" };
+  if (companies.some((item) => item.website === website)) return { ok: false, error: "此網站已存在。" };
+  return {
+    ok: true,
+    value: {
+      id: createId(now),
+      name,
+      website,
+      disabled: false,
+      createdAt: stamp(now),
+    },
+  };
+}
+
+export function disableCompany(companies: Company[], name: string): NamedResult<Company[]> {
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "公司名稱須填寫。" };
+  const current = companies.find((item) => item.name === trimmed);
+  if (!current) return { ok: false, error: "找不到此公司。" };
+  if (current.disabled) return { ok: false, error: "此公司已停用。" };
+  return {
+    ok: true,
+    value: companies.map((item) => (item.id === current.id ? { ...item, disabled: true } : item)),
+  };
+}
+
+export function appendOperationLog(
+  logs: OperationLog[],
+  input: { companyId: string; actor: string; action: string },
+  now: Date,
+): OperationLog[] {
+  return [
+    {
+      id: createId(now),
+      companyId: input.companyId,
+      actor: input.actor,
+      action: input.action,
+      at: stamp(now),
+    },
+    ...logs,
+  ];
+}
+
+export function logsForCompany(logs: OperationLog[], companyId: string): OperationLog[] {
+  return logs.filter((item) => item.companyId === companyId);
 }

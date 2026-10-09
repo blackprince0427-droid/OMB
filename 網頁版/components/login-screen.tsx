@@ -5,25 +5,52 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DEFAULT_COMPANY_ID } from "@/lib/office";
 import { useOffice } from "@/components/office-provider";
 
 export function LoginScreen() {
   const router = useRouter();
-  const { ready, session, login } = useOffice();
+  const { ready, session, login, company, companyState, companyBase, users } = useOffice();
   const [error, setError] = useState("");
+  const home = `${companyBase}/overview`;
+  const isDefault = company?.id === DEFAULT_COMPANY_ID;
 
   useEffect(() => {
-    router.prefetch("/overview");
-  }, [router]);
+    if (companyState === "ready") router.prefetch(home);
+  }, [companyState, home, router]);
 
   useEffect(() => {
-    if (ready && session) router.replace("/overview");
-  }, [ready, router, session]);
+    if (ready && session && companyState === "ready") router.replace(home);
+  }, [companyState, home, ready, router, session]);
 
-  if (!ready || session) {
+  if (!ready || (session && companyState === "ready")) {
     return (
       <main className="grid min-h-svh place-items-center text-sm text-muted-foreground">
         正在確認登入狀態
+      </main>
+    );
+  }
+
+  if (companyState === "missing") {
+    return (
+      <main className="grid min-h-svh place-items-center bg-[#f4f5f7] px-6">
+        <section className="w-full max-w-[440px] rounded-2xl border border-[#e6e8ee] bg-white px-7 py-7">
+          <h1 className="text-[22px] font-bold">找不到此公司</h1>
+          <p className="mt-2 text-[13px] text-muted-foreground">這個網址沒有對應的公司。</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (companyState === "disabled") {
+    return (
+      <main className="grid min-h-svh place-items-center bg-[#f4f5f7] px-6">
+        <section className="w-full max-w-[440px] rounded-2xl border border-[#e6e8ee] bg-white px-7 py-7">
+          <h1 className="text-[22px] font-bold">此公司已停用</h1>
+          <p data-testid="company-disabled" className="mt-2 text-[13px] text-muted-foreground">
+            此公司已停用，帳戶不得登入。
+          </p>
+        </section>
       </main>
     );
   }
@@ -36,7 +63,12 @@ export function LoginScreen() {
         </div>
         <h1 className="mt-3.5 text-[22px] font-bold">小型辦公軟件</h1>
         <p className="mt-1 mb-4 text-[13px] leading-relaxed text-muted-foreground">
-          網頁版。未通過驗證不得進入主框架。預設帳戶與密碼均為 CEO。
+          網頁版。未通過驗證不得進入主框架。
+          {isDefault
+            ? "預設帳戶與密碼均為 CEO。"
+            : users.length === 0
+              ? `${company?.name ?? "此公司"}尚未建立帳戶。`
+              : `請使用${company?.name ?? "此公司"}的帳戶登入。`}
         </p>
         {error ? (
           <p
@@ -61,7 +93,7 @@ export function LoginScreen() {
               setError(message);
               return;
             }
-            router.push("/overview");
+            router.push(home);
           }}
         >
           <div className="space-y-1.5">
@@ -70,7 +102,7 @@ export function LoginScreen() {
               id="account"
               name="account"
               autoComplete="username"
-              defaultValue="CEO"
+              defaultValue={isDefault ? "CEO" : ""}
               className="h-10"
             />
           </div>
@@ -81,7 +113,7 @@ export function LoginScreen() {
               name="password"
               type="password"
               autoComplete="current-password"
-              defaultValue="CEO"
+              defaultValue={isDefault ? "CEO" : ""}
               className="h-10"
             />
           </div>
@@ -90,7 +122,9 @@ export function LoginScreen() {
           </Button>
         </form>
         <p className="mt-3.5 text-xs leading-relaxed text-[#8b919d]">
-          驗收對照：帳戶 CEO、密碼 CEO 可登入；錯誤密碼停留於此頁。登入後可在「帳戶」更改自己的密碼，並可登出返回此頁。
+          {isDefault
+            ? "驗收對照：帳戶 CEO、密碼 CEO 可登入；錯誤密碼停留於此頁。登入後可在「帳戶」更改自己的密碼，並可登出返回此頁。"
+            : "此網站只使用這一家公司的帳戶。"}
         </p>
       </section>
     </main>

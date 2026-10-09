@@ -175,7 +175,7 @@ export function OverviewView() {
             )}
           </div>
           <p className="rounded-xl border border-dashed border-[#d8dbe3] bg-[#f8fafc] px-3 py-2.5 text-xs leading-relaxed text-[#667085]">
-            第三版不做次日通知，也不讓個別權限覆蓋職位順序。工作紀錄不從月視圖進入。角色指派畫面、個人事項與審批路徑仍未納入。
+            公司網站不做次日通知，也不讓個別權限覆蓋職位順序。工作紀錄不從月視圖進入。角色指派畫面、個人事項與審批路徑仍未納入。建立公司、停用公司與公司基本資料不在公司網站。
           </p>
         </section>
       </div>

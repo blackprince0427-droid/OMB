@@ -17,15 +17,19 @@ import {
   appendOperationLog,
   assignMember,
   authenticate,
+  authenticateDeveloper,
   canManageDepartments,
   changePassword,
   changePosition,
   companyBaseFromPath,
-  companyIdFromPath,
+  companyForLocation,
   completeWorkRecord,
-  createCompany,
+  createCompanyWithInitialCeo,
   disableCompany,
   emptyBundle,
+  isConsolePath,
+  logsForCompany,
+  parseWebsite,
   setStaffPermission,
   stamp,
   updateWorkRecord,
@@ -41,12 +45,15 @@ import {
   type WorkRecord,
 } from "@/lib/office";
 import {
+  COMPANIES_KEY,
   ensureOfficeStore,
+  isCompanyDisabled,
+  loadDeveloperSession,
   loadLogs,
   loadSession,
-  peekSession,
   saveCompanies,
   saveCompanyBundle,
+  saveDeveloperSession,
   saveLogs,
   saveSession,
 } from "@/lib/storage";
@@ -90,15 +97,26 @@ type OfficeContextValue = {
   createRecord: (input: { title: string; content: string; workDate?: string }) => string | null;
   editRecord: (id: string, input: { title: string; content: string }) => string | null;
   completeRecord: (id: string) => string | null;
-  openCompany: (input: { name: string; website: string }) => { error: string | null; path: string };
+  developer: boolean;
+  developerLogin: (account: string, password: string) => string | null;
+  developerLogout: () => void;
+  openCompany: (input: {
+    name: string;
+    website: string;
+    ceoName: string;
+    account: string;
+    password: string;
+  }) => { error: string | null; path: string };
   disableCompanyByName: (name: string) => string | null;
+  listCompanies: () => Company[];
+  companyLogs: (companyId: string) => { at: string; actor: string; action: string }[];
 };
 
 const OfficeContext = createContext<OfficeContextValue | null>(null);
 
 export function OfficeProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const routeKey = companyIdFromPath(pathname) ?? "backend";
+  const routeKey = isConsolePath(pathname) ? "backend" : pathname;
   const companyBase = companyBaseFromPath(pathname);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
@@ -111,19 +129,18 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [permissions, setPermissions] = useState<StaffPermission[]>([]);
   const [records, setRecords] = useState<WorkRecord[]>([]);
+  const [developer, setDeveloper] = useState(false);
   const ready = loadedFor === routeKey;
 
   useEffect(() => {
     const store = ensureOfficeStore();
-    const activeId = companyIdFromPath(pathname);
     // 登入狀態在瀏覽器裡。首屏要和伺服器一致，所以等掛載後才讀取。
     /* eslint-disable react-hooks/set-state-in-effect -- localStorage and sessionStorage are not available during SSR */
-    if (activeId === null) {
-      const peeked = peekSession(store);
-      if (peeked?.companyDisabled) saveSession(null);
+    if (isConsolePath(pathname)) {
       setCompany(null);
       setCompanyState("backend");
-      setSession(peeked && !peeked.companyDisabled ? peeked.session : null);
+      setDeveloper(loadDeveloperSession());
+      setSession(null);
       setUsers([]);
       setDepartments([]);
       setPositions([]);
@@ -133,10 +150,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setLoadedFor("backend");
       return;
     }
-    const found = store.companies.find((item) => item.id === activeId) ?? null;
+    const found = companyForLocation(store.companies, window.location.origin, pathname);
     if (!found) {
       setCompany(null);
       setCompanyState("missing");
+      setDeveloper(false);
       setSession(null);
       setUsers([]);
       setDepartments([]);
@@ -144,10 +162,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setAssignments([]);
       setPermissions([]);
       setRecords([]);
-      setLoadedFor(activeId);
+      setLoadedFor(pathname);
       return;
     }
     const bundle = store.bundles[found.id] ?? emptyBundle();
+    setDeveloper(false);
     setCompany(found);
     setCompanyState(found.disabled ? "disabled" : "ready");
     setUsers(bundle.users);
@@ -157,15 +176,29 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     setPermissions(bundle.permissions);
     setRecords(bundle.records);
     if (found.disabled) {
-      const peeked = peekSession(store);
-      if (peeked?.session.companyId === found.id) saveSession(null);
+      const current = loadSession(bundle.users, found.id);
+      if (current) saveSession(null);
       setSession(null);
     } else {
       setSession(loadSession(bundle.users, found.id));
     }
-    setLoadedFor(activeId);
+    setLoadedFor(pathname);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [pathname]);
+
+  useEffect(() => {
+    if (!company) return;
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== COMPANIES_KEY && event.key !== null) return;
+      if (!isCompanyDisabled(company.id)) return;
+      saveSession(null);
+      setSession(null);
+      setCompanyState("disabled");
+      setCompany({ ...company, disabled: true });
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [company]);
 
   const value = useMemo<OfficeContextValue>(() => {
     function currentBundle(): CompanyBundle {
@@ -178,6 +211,14 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     function note(actor: string, action: string) {
       if (!company) return;
       saveLogs(appendOperationLog(loadLogs(), { companyId: company.id, actor, action }, new Date()));
+    }
+    function stopped(): string | null {
+      if (!company || !isCompanyDisabled(company.id)) return null;
+      saveSession(null);
+      setSession(null);
+      setCompanyState("disabled");
+      setCompany({ ...company, disabled: true });
+      return "此公司已停用，不得繼續操作。";
     }
     return {
       ready,
@@ -192,7 +233,20 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       assignments,
       permissions,
       records,
+      developer,
+      developerLogin(account, password) {
+        if (!authenticateDeveloper(account, password)) return "開發人員帳戶或密碼不正確。";
+        saveDeveloperSession(true);
+        setDeveloper(true);
+        return null;
+      },
+      developerLogout() {
+        saveDeveloperSession(false);
+        setDeveloper(false);
+      },
       login(account, password) {
+        const halt = stopped();
+        if (halt) return halt;
         if (!company || company.disabled) return "此公司已停用，帳戶不得登入。";
         const user = authenticate(users, account, password);
         if (!user) return "帳戶或密碼不正確，未能進入主框架。";
@@ -212,6 +266,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         return null;
       },
       createUser(input) {
+        const halt = stopped();
+        if (halt) return halt;
         const result = addUser(users, input, new Date());
         if (!result.ok) return result.error;
         const nextUsers = [...users, result.user];
@@ -230,6 +286,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         return null;
       },
       createDepartment(name) {
+        const halt = stopped();
+        if (halt) return halt;
         const result = addDepartment(departments, name, new Date());
         if (!result.ok) return result.error;
         const next = [...departments, result.value];
@@ -239,6 +297,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         return null;
       },
       createPosition(input) {
+        const halt = stopped();
+        if (halt) return halt;
         const result = addPosition(departments, positions, input, new Date());
         if (!result.ok) return result.error;
         const next = [...positions, result.value];
@@ -248,6 +308,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         return null;
       },
       assignToDepartment(input) {
+        const halt = stopped();
+        if (halt) return halt;
         const result = assignMember(users, departments, positions, assignments, input);
         if (!result.ok) return result.error;
         writeBundle({ ...currentBundle(), assignments: result.value });
@@ -256,6 +318,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         return null;
       },
       saveStaffPermission(account, noteText) {
+        const halt = stopped();
+        if (halt) return halt;
         const result = setStaffPermission(users, permissions, account, noteText);
         if (!result.ok) return result.error;
         writeBundle({ ...currentBundle(), permissions: result.value });
@@ -264,6 +328,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         return null;
       },
       changeOwnPassword(oldPassword, newPassword) {
+        const halt = stopped();
+        if (halt) return halt;
         if (!session) return "未登入不得更改密碼。";
         const result = changePassword(users, session.account, oldPassword, newPassword);
         if (!result.ok) return result.error;
@@ -278,6 +344,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         setSession(null);
       },
       changeMemberPosition(input) {
+        const halt = stopped();
+        if (halt) return halt;
         if (!session || !canManageDepartments(session.role)) return "沒有權限更改職位。";
         const result = changePosition(positions, assignments, input);
         if (!result.ok) return result.error;
@@ -287,6 +355,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         return null;
       },
       createRecord(input) {
+        const halt = stopped();
+        if (halt) return halt;
         if (!session) return "未登入不得處理工作紀錄。";
         const result = addWorkRecord(records, session.account, input, new Date());
         if (!result.ok) return result.error;
@@ -297,6 +367,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         return null;
       },
       editRecord(id, input) {
+        const halt = stopped();
+        if (halt) return halt;
         if (!session) return "未登入不得處理工作紀錄。";
         const result = updateWorkRecord(records, session.account, id, input, new Date());
         if (!result.ok) return result.error;
@@ -306,6 +378,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         return null;
       },
       completeRecord(id) {
+        const halt = stopped();
+        if (halt) return halt;
         if (!session) return "未登入不得處理工作紀錄。";
         const result = completeWorkRecord(records, session.account, id, new Date());
         if (!result.ok) return result.error;
@@ -315,21 +389,25 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         return null;
       },
       openCompany(input) {
+        if (!developer) return { error: "請先以開發人員登入。", path: "" };
         const store = ensureOfficeStore();
-        const result = createCompany(store.companies, input, new Date());
+        const result = createCompanyWithInitialCeo(store.companies, input, new Date());
         if (!result.ok) return { error: result.error, path: "" };
-        saveCompanies([...store.companies, result.value]);
-        saveCompanyBundle(result.value.id, emptyBundle());
+        saveCompanies([...store.companies, result.value.company]);
+        saveCompanyBundle(result.value.company.id, { ...emptyBundle(), users: [result.value.user] });
         saveLogs(
           appendOperationLog(
             loadLogs(),
-            { companyId: result.value.id, actor: "開發者後台", action: "建立公司" },
+            { companyId: result.value.company.id, actor: "開發者後台", action: "建立公司與初始 CEO" },
             new Date(),
           ),
         );
-        return { error: null, path: `/s/${result.value.id}` };
+        const parsed = parseWebsite(result.value.company.website);
+        const path = !parsed || (parsed.host !== null && parsed.host !== window.location.host) ? "" : parsed.path;
+        return { error: null, path };
       },
       disableCompanyByName(name) {
+        if (!developer) return "請先以開發人員登入。";
         const store = ensureOfficeStore();
         const result = disableCompany(store.companies, name);
         if (!result.ok) return result.error;
@@ -346,11 +424,24 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         }
         return null;
       },
+      listCompanies() {
+        if (!developer) return [];
+        return ensureOfficeStore().companies;
+      },
+      companyLogs(companyId) {
+        if (!developer) return [];
+        return logsForCompany(loadLogs(), companyId).map((item) => ({
+          at: item.at,
+          actor: item.actor,
+          action: item.action,
+        }));
+      },
     };
   }, [
     activity,
     assignments,
     company,
+    developer,
     companyBase,
     companyState,
     departments,

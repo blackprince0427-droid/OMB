@@ -79,7 +79,7 @@ function ShellFrame({
           </div>
           <div>
             <p className="text-[15px] font-bold">小型辦公</p>
-            <p className="text-xs text-[#8b919d]">網頁版 · 第四版</p>
+            <p className="text-xs text-[#8b919d]">網頁版 · 第五版</p>
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto md:block" aria-label="主框架導覽">

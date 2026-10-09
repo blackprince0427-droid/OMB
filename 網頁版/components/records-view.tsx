@@ -118,7 +118,7 @@ export function RecordsView() {
         <div>
           <h1 className="text-[22px] font-bold">工作紀錄</h1>
           <p className="text-[13px] text-muted-foreground">
-            每個帳戶只能處理自己的工作紀錄。每次顯示 10 筆。可按日期只看當天；當天超過 10 筆仍分頁。同一部門內，順序數字較大的職位可以查詢較低職位的紀錄，不能修改，也不能跨部門查詢。
+            每個帳戶只能處理自己的工作紀錄。每次顯示 10 筆。可按日期只看當天；當天超過 10 筆仍分頁。同一部門內，只可查詢較低職位的紀錄。職位順序相同時不可互相查詢，不能修改，也不能跨部門查詢。
           </p>
         </div>
       </div>
@@ -289,7 +289,7 @@ export function RecordsView() {
       <section className="mt-3 rounded-2xl border border-[#e6e8ee] bg-white p-4">
         <h2 className="mb-1 text-[15px] font-semibold">查詢較低職位的工作紀錄</h2>
         <p className="mb-3 text-xs leading-relaxed text-[#667085]">
-          只在同一部門、而且自己的順序數字較大時可以查看。不能修改，也不能用來查看其他部門。每次顯示 10 筆，可按日期只看當天。工作紀錄不從月視圖進入。
+          只在同一部門、而且自己的順序數字較大時可以查看。順序相同不可互相查詢。不能修改，也不能用來查看其他部門。每次顯示 10 筆，可按日期只看當天。工作紀錄不從月視圖進入。
         </p>
         {queryable.length === 0 ? (
           <p data-testid="query-empty" className="text-[13px] text-muted-foreground">

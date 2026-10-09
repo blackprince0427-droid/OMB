@@ -120,6 +120,9 @@ export function addUser(
   if (!name || !account || !password) {
     return { ok: false, error: "顯示名稱、帳戶與密碼均須填寫。" };
   }
+  if (account === "CEO" && password === "CEO") {
+    return { ok: false, error: "新帳戶不得使用 CEO 作為帳戶與密碼。" };
+  }
   if (!isRole(input.role)) {
     return { ok: false, error: "角色只可為 CEO、HR、會計或員工。" };
   }
@@ -527,7 +530,7 @@ export function defaultCompany(): Company {
   return {
     id: DEFAULT_COMPANY_ID,
     name: "預設公司",
-    website: "",
+    website: "/",
     disabled: false,
     createdAt: "2026-10-08 09:00",
   };
@@ -548,16 +551,79 @@ export function isConsolePath(path: string): boolean {
   return path === "/console" || path.startsWith("/console/");
 }
 
+const ROOT_PATHS = new Set(["/", "/overview", "/calendar", "/records", "/pending", "/account", "/users", "/departments"]);
+
 export function companyBaseFromPath(path: string): string {
-  const match = /^\/s\/[^/]+/.exec(path);
-  return match ? match[0] : "";
+  if (isConsolePath(path) || path === "/" || ROOT_PATHS.has(path)) return "";
+  const segment = path.split("/").filter(Boolean)[0];
+  return segment ? `/${segment}` : "";
 }
 
-export function companyIdFromPath(path: string): string | null {
-  if (isConsolePath(path)) return null;
-  const match = /^\/s\/([^/]+)/.exec(path);
-  if (!match?.[1]) return DEFAULT_COMPANY_ID;
-  return decodeURIComponent(match[1]);
+export const DEVELOPER_ACCOUNT = "開發人員";
+export const DEVELOPER_PASSWORD = "開發人員";
+
+export function authenticateDeveloper(account: string, password: string): boolean {
+  return account.trim() === DEVELOPER_ACCOUNT && password === DEVELOPER_PASSWORD;
+}
+
+export type ParsedWebsite = { host: string | null; path: string };
+
+export function parseWebsite(website: string): ParsedWebsite | null {
+  const trimmed = website.trim();
+  if (!trimmed) return null;
+  let host: string | null = null;
+  let path = trimmed;
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      host = url.host;
+      path = url.pathname || "/";
+    } catch {
+      return null;
+    }
+  } else if (!trimmed.startsWith("/")) {
+    return null;
+  }
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  if (!path.startsWith("/")) return null;
+  if (path.split("/").filter(Boolean).length > 1) return null;
+  if (path === "/console" || (path !== "/" && ROOT_PATHS.has(path))) return null;
+  return { host, path };
+}
+
+function parsedCompanyWebsite(company: Company): ParsedWebsite | null {
+  const website = company.id === DEFAULT_COMPANY_ID && company.website === "" ? "/" : company.website;
+  return parseWebsite(website);
+}
+
+function websitesConflict(left: ParsedWebsite, right: ParsedWebsite): boolean {
+  if (left.path !== right.path) return false;
+  if (left.path === "/" && left.host !== right.host) return false;
+  if (left.host === null || right.host === null) return true;
+  return left.host === right.host;
+}
+
+export function companyForLocation(companies: Company[], origin: string, pathname: string): Company | null {
+  let originHost = "";
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    originHost = "";
+  }
+  let best: { company: Company; score: number } | null = null;
+  for (const company of companies) {
+    const parsed = parsedCompanyWebsite(company);
+    if (!parsed) continue;
+    if (parsed.host !== null && parsed.host !== originHost) continue;
+    const matches =
+      parsed.path === "/"
+        ? ROOT_PATHS.has(pathname)
+        : pathname === parsed.path || pathname.startsWith(`${parsed.path}/`);
+    if (!matches) continue;
+    const score = (parsed.host ? 10000 : 0) + parsed.path.length;
+    if (!best || score > best.score) best = { company, score };
+  }
+  return best?.company ?? null;
 }
 
 export function createCompany(
@@ -569,8 +635,17 @@ export function createCompany(
   const website = input.website.trim();
   if (!name) return { ok: false, error: "公司名稱須填寫。" };
   if (!website) return { ok: false, error: "網站須填寫。" };
+  const parsed = parseWebsite(website);
+  if (!parsed) return { ok: false, error: "網站須為一層路徑（例如 /acme）或 http(s) 網址，且不能占用系統頁面。" };
   if (companies.some((item) => item.name === name)) return { ok: false, error: "此公司名稱已存在。" };
-  if (companies.some((item) => item.website === website)) return { ok: false, error: "此網站已存在。" };
+  if (
+    companies.some((item) => {
+      const other = parsedCompanyWebsite(item);
+      return other ? websitesConflict(parsed, other) : false;
+    })
+  ) {
+    return { ok: false, error: "此網站已存在。" };
+  }
   return {
     ok: true,
     value: {
@@ -581,6 +656,22 @@ export function createCompany(
       createdAt: stamp(now),
     },
   };
+}
+
+export function createCompanyWithInitialCeo(
+  companies: Company[],
+  input: { name: string; website: string; ceoName: string; account: string; password: string },
+  now: Date,
+): NamedResult<{ company: Company; user: OfficeUser }> {
+  const created = createCompany(companies, input, now);
+  if (!created.ok) return created;
+  const ceo = addUser(
+    [],
+    { name: input.ceoName, account: input.account, password: input.password, role: "CEO" },
+    now,
+  );
+  if (!ceo.ok) return ceo;
+  return { ok: true, value: { company: created.value, user: ceo.user } };
 }
 
 export function disableCompany(companies: Company[], name: string): NamedResult<Company[]> {

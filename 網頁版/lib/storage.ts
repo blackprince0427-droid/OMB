@@ -27,6 +27,7 @@ export const RECORDS_KEY = "osp-dev-v2-records";
 export const COMPANIES_KEY = "osp-dev-v4-companies";
 export const BUNDLES_KEY = "osp-dev-v4-bundles";
 export const LOGS_KEY = "osp-dev-v4-logs";
+export const DEVELOPER_SESSION_KEY = "osp-dev-v5-dev-session";
 
 function isUser(value: unknown): value is OfficeUser {
   if (!value || typeof value !== "object") return false;
@@ -319,6 +320,23 @@ export function loadLogs(): OperationLog[] {
 
 export function saveLogs(logs: OperationLog[]): void {
   window.localStorage.setItem(LOGS_KEY, JSON.stringify(logs));
+}
+
+export function isCompanyDisabled(companyId: string): boolean {
+  return ensureOfficeStore().companies.some((item) => item.id === companyId && item.disabled);
+}
+
+export function loadDeveloperSession(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.sessionStorage.getItem(DEVELOPER_SESSION_KEY) === "開發人員";
+}
+
+export function saveDeveloperSession(active: boolean): void {
+  if (!active) {
+    window.sessionStorage.removeItem(DEVELOPER_SESSION_KEY);
+    return;
+  }
+  window.sessionStorage.setItem(DEVELOPER_SESSION_KEY, "開發人員");
 }
 
 export function peekSession(store: OfficeStore): { session: Session; companyDisabled: boolean } | null {

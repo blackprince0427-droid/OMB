@@ -10,10 +10,12 @@ import {
   authenticate,
   canManageDepartments,
   canManageUsers,
+  authenticateDeveloper,
   canQueryAccount,
   changePassword,
-  companyIdFromPath,
+  companyForLocation,
   createCompany,
+  createCompanyWithInitialCeo,
   defaultCompany,
   disableCompany,
   emptyBundle,
@@ -375,10 +377,71 @@ test("不同公司的日誌不得互通", () => {
   assert.equal(logsForCompany(both, "c").length, 0);
 });
 
+test("新帳戶不得使用 CEO 作為帳戶與密碼", () => {
+  const rejected = addUser(seedUsers(), { name: "某人", account: "CEO", password: "CEO", role: "員工" }, now);
+  assert.equal(rejected.ok, false);
+  const named = addUser([], { name: "陳可恩", account: "CEO", password: "其他密碼", role: "CEO" }, now);
+  assert.equal(named.ok, true);
+});
+
+test("建立公司必須同時建立只屬於該公司的初始 CEO", () => {
+  const created = createCompanyWithInitialCeo(
+    [defaultCompany()],
+    { name: "甲公司", website: "/acme", ceoName: " 陳可恩 ", account: " BOSS ", password: "secret" },
+    now,
+  );
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  assert.equal(created.value.user.account, "BOSS");
+  assert.equal(created.value.user.role, "CEO");
+  assert.equal(created.value.user.password, "secret");
+  const shared = createCompanyWithInitialCeo(
+    [defaultCompany()],
+    { name: "乙公司", website: "/beta", ceoName: "某人", account: "CEO", password: "CEO" },
+    now,
+  );
+  assert.equal(shared.ok, false);
+  const blockedPath = createCompany([defaultCompany()], { name: "丙公司", website: "/overview" }, now);
+  assert.equal(blockedPath.ok, false);
+});
+
+test("一個網站只載入網站相符的公司", () => {
+  const acme = createCompany([defaultCompany()], { name: "甲公司", website: "/acme" }, now);
+  assert.equal(acme.ok, true);
+  if (!acme.ok) return;
+  const hosted = createCompany([defaultCompany(), acme.value], { name: "乙公司", website: "https://acme.example" }, now);
+  assert.equal(hosted.ok, true);
+  if (!hosted.ok) return;
+  const companies = [defaultCompany(), acme.value, hosted.value];
+  assert.equal(companyForLocation(companies, "http://127.0.0.1:43123", "/overview")?.name, "預設公司");
+  assert.equal(companyForLocation(companies, "http://127.0.0.1:43123", "/acme")?.name, "甲公司");
+  assert.equal(companyForLocation(companies, "http://127.0.0.1:43123", "/acme/records")?.name, "甲公司");
+  assert.equal(companyForLocation(companies, "https://acme.example", "/")?.name, "乙公司");
+  assert.equal(companyForLocation(companies, "https://acme.example", "/overview")?.id, hosted.value.id);
+  assert.notEqual(companyForLocation(companies, "http://127.0.0.1:43123", "/acme")?.id, "default");
+});
+
+test("同部門職位順序相同不可互相查詢", () => {
+  const positions: Position[] = [
+    { id: "p1", departmentId: "d1", name: "甲", rank: 2, createdAt: "" },
+    { id: "p2", departmentId: "d1", name: "乙", rank: 2, createdAt: "" },
+  ];
+  const assignments: Assignment[] = [
+    { account: "A", departmentId: "d1", positionId: "p1" },
+    { account: "B", departmentId: "d1", positionId: "p2" },
+  ];
+  assert.equal(canQueryAccount(assignments, positions, "A", "B"), false);
+  assert.equal(canQueryAccount(assignments, positions, "B", "A"), false);
+});
+
+test("開發人員登入不使用公司帳戶", () => {
+  assert.equal(authenticateDeveloper("開發人員", "開發人員"), true);
+  assert.equal(authenticateDeveloper("CEO", "CEO"), false);
+  assert.equal(authenticateDeveloper("開發人員", "開發人員 "), false);
+});
+
 test("公司網站與後台的路徑分開", () => {
-  assert.equal(companyIdFromPath("/overview"), "default");
-  assert.equal(companyIdFromPath("/console"), null);
-  assert.equal(companyIdFromPath("/s/acme/records"), "acme");
+  assert.equal(companyForLocation([defaultCompany()], "http://127.0.0.1:43123", "/console"), null);
 });
 
 test("月視圖由星期日開始，並鋪滿當月", () => {

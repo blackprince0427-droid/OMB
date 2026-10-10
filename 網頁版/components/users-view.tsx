@@ -41,7 +41,7 @@ export function UsersView() {
         <div>
           <h1 className="text-[22px] font-bold">使用者</h1>
           <p className="text-[13px] text-muted-foreground">
-            CEO 可新增使用者。本頁不是角色指派畫面，角色只在建立時寫入。
+            CEO 可新增使用者。角色在建立時寫入；事後調整請到「權限指派」。
           </p>
         </div>
       </div>
@@ -106,7 +106,7 @@ export function UsersView() {
               }
               const name = String(data.get("name") ?? "").trim();
               setError("");
-              setOk(`已新增使用者「${name}」。角色於建立時寫入；本版不提供事後指派畫面。`);
+              setOk(`已新增使用者「${name}」。角色於建立時寫入；CEO 與 HR 可在「權限指派」再調整。`);
               event.currentTarget.reset();
               setRole("員工");
             }}
@@ -149,7 +149,7 @@ export function UsersView() {
             <Button type="submit">新增</Button>
           </form>
           <p className="mt-3 rounded-xl border border-dashed border-[#d8dbe3] bg-[#f8fafc] px-3 py-2.5 text-xs leading-relaxed text-[#667085]">
-            角色區分 CEO、HR、會計、員工。角色只在建立時寫入。更改自己的密碼在「帳戶」。
+            角色區分 CEO、HR、會計、員工。建立時寫入角色，CEO 與 HR 可在「權限指派」再調整。更改自己的密碼在「帳戶」。
           </p>
         </section>
       </div>

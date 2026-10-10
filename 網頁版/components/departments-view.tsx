@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Building2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,7 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FrameLink } from "@/components/frame-nav";
 import { canManageDepartments } from "@/lib/office";
+import { cn } from "@/lib/utils";
 import { useOffice } from "@/components/office-provider";
 
 function Notice({ error, ok, errorId, okId }: { error: string; ok: string; errorId: string; okId: string }) {
@@ -40,26 +42,22 @@ export function DepartmentsView() {
     departments,
     positions,
     assignments,
-    permissions,
+    companyBase,
     createDepartment,
     createPosition,
     assignToDepartment,
     changeMemberPosition,
-    saveStaffPermission,
   } = useOffice();
   const [departmentId, setDepartmentId] = useState("");
   const [assignDepartmentId, setAssignDepartmentId] = useState("");
   const [account, setAccount] = useState("");
   const [positionId, setPositionId] = useState("");
-  const [permissionAccount, setPermissionAccount] = useState("");
   const [deptError, setDeptError] = useState("");
   const [deptOk, setDeptOk] = useState("");
   const [posError, setPosError] = useState("");
   const [posOk, setPosOk] = useState("");
   const [assignError, setAssignError] = useState("");
   const [assignOk, setAssignOk] = useState("");
-  const [permError, setPermError] = useState("");
-  const [permOk, setPermOk] = useState("");
   const [moveAccount, setMoveAccount] = useState("");
   const [moveDepartmentId, setMoveDepartmentId] = useState("");
   const [movePositionId, setMovePositionId] = useState("");
@@ -424,61 +422,15 @@ export function DepartmentsView() {
         <section className="rounded-2xl border border-[#e6e8ee] bg-white p-4">
           <h2 className="mb-3 text-[15px] font-semibold">個別權限</h2>
           <p className="mb-3 text-xs leading-relaxed text-[#667085]">
-            可以為帳戶記錄個別權限。本版不讓這項設定覆蓋職位順序。查詢工作紀錄仍只看同一部門內誰的順序數字較大。
+            角色與個別權限改在「權限指派」儲存。覆蓋開啟後，查詢範圍以個別權限為準，不再只看職位順序。
           </p>
-          <Notice error={permError} ok={permOk} errorId="perm-error" okId="perm-ok" />
-          <form
-            data-testid="perm-form"
-            className="space-y-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              const message = saveStaffPermission(permissionAccount, String(data.get("note") ?? ""));
-              if (message) {
-                setPermOk("");
-                setPermError(message);
-                return;
-              }
-              setPermError("");
-              setPermOk("已記錄個別權限。此設定不覆蓋職位順序。");
-            }}
+          <FrameLink
+            href={`${companyBase}/permissions`}
+            data-testid="open-permissions"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
           >
-            <div className="space-y-1.5">
-              <Label htmlFor="perm-user">帳戶</Label>
-              <Select
-                items={userItems}
-                value={permissionAccount}
-                onValueChange={(value) => setPermissionAccount(value ?? "")}
-              >
-                <SelectTrigger id="perm-user" className="h-10 w-full">
-                  <SelectValue placeholder="選擇帳戶" />
-                </SelectTrigger>
-                <SelectContent>
-                  {userItems.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="perm-note">個別權限</Label>
-              <Input id="perm-note" name="note" className="h-10" />
-            </div>
-            <Button type="submit">記錄</Button>
-          </form>
-          <ul className="mt-4 space-y-2" data-testid="perm-list">
-            {permissions.length === 0 ? (
-              <li className="text-[13px] text-muted-foreground">尚未記錄個別權限。</li>
-            ) : (
-              permissions.map((item) => (
-                <li key={item.account} className="text-[13px]">
-                  {users.find((user) => user.account === item.account)?.name ?? item.account}：{item.note}
-                </li>
-              ))
-            )}
-          </ul>
+            前往權限指派
+          </FrameLink>
         </section>
       </div>
     </div>

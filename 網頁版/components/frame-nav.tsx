@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import { companyBaseFromPath } from "@/lib/office";
 
-export type FrameScreen = "overview" | "calendar" | "records" | "pending" | "account" | "users" | "departments";
+export type FrameScreen = "overview" | "calendar" | "records" | "pending" | "account" | "users" | "departments" | "permissions";
 
 const FrameNavContext = createContext<(href: string) => void>(() => {});
 
@@ -16,6 +16,7 @@ export function screenFromPath(path: string): FrameScreen {
   if (rest.startsWith("/account")) return "account";
   if (rest.startsWith("/users")) return "users";
   if (rest.startsWith("/departments")) return "departments";
+  if (rest.startsWith("/permissions")) return "permissions";
   return "overview";
 }
 

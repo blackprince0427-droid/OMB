@@ -11,7 +11,9 @@ import {
   type OfficeUser,
   type OperationLog,
   type Position,
+  type ProjectTag,
   type Session,
+  normalizeStaffPermission,
   normalizeWorkRecord,
   type StaffPermission,
   type WorkRecord,
@@ -121,10 +123,18 @@ function isAssignment(value: unknown): value is Assignment {
   return typeof item.account === "string" && typeof item.departmentId === "string" && typeof item.positionId === "string";
 }
 
-function isPermission(value: unknown): value is StaffPermission {
+function isTag(value: unknown): value is ProjectTag {
   if (!value || typeof value !== "object") return false;
-  const item = value as Partial<StaffPermission>;
-  return typeof item.account === "string" && typeof item.note === "string" && item.note.trim().length > 0;
+  const item = value as Partial<ProjectTag>;
+  return typeof item.id === "string" && typeof item.name === "string" && item.name.trim().length > 0 && typeof item.createdAt === "string";
+}
+
+function readPermissions(value: unknown): StaffPermission[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const permission = normalizeStaffPermission(item);
+    return permission ? [permission] : [];
+  });
 }
 
 export function loadDepartments(): Department[] {
@@ -152,7 +162,14 @@ export function saveAssignments(assignments: Assignment[]): void {
 }
 
 export function loadPermissions(): StaffPermission[] {
-  return readList(PERMISSIONS_KEY, isPermission);
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PERMISSIONS_KEY);
+    if (!raw) return [];
+    return readPermissions(JSON.parse(raw));
+  } catch {
+    return [];
+  }
 }
 
 export function savePermissions(permissions: StaffPermission[]): void {
@@ -227,13 +244,14 @@ function bundleFromUnknown(companyId: string, value: unknown): CompanyBundle {
     departments: Array.isArray(source.departments) ? source.departments.filter(isDepartment) : [],
     positions: Array.isArray(source.positions) ? source.positions.filter(isPosition) : [],
     assignments: Array.isArray(source.assignments) ? source.assignments.filter(isAssignment) : [],
-    permissions: Array.isArray(source.permissions) ? source.permissions.filter(isPermission) : [],
+    permissions: readPermissions(source.permissions),
     records: Array.isArray(source.records)
       ? source.records.flatMap((item) => {
           const record = normalizeWorkRecord(item);
           return record ? [record] : [];
         })
       : [],
+    tags: Array.isArray(source.tags) ? source.tags.filter(isTag) : [],
   };
 }
 

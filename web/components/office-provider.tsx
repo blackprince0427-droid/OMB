@@ -49,6 +49,26 @@ import {
   type WorkRecord,
 } from "@/lib/office";
 import {
+  addLink,
+  addNote,
+  completionRecord,
+  createChild,
+  createInvite,
+  createProject,
+  deleteLeaf,
+  deleteProject,
+  moveLink,
+  respondInvite,
+  restoreProject,
+  setNodeStatus,
+  setProjectVisibility,
+  toggleNote,
+  withdrawInvite,
+  type TaskInvite,
+  type TaskNode,
+  type VisibilityMode,
+} from "@/lib/tasks";
+import {
   COMPANIES_KEY,
   ensureOfficeStore,
   isCompanyDisabled,
@@ -85,6 +105,8 @@ type OfficeContextValue = {
   permissions: StaffPermission[];
   records: WorkRecord[];
   tags: ProjectTag[];
+  tasks: TaskNode[];
+  invites: TaskInvite[];
   login: (account: string, password: string) => string | null;
   createUser: (input: {
     name: string;
@@ -106,6 +128,20 @@ type OfficeContextValue = {
   reassignRecord: (id: string, assignee: string) => string | null;
   createTag: (name: string) => string | null;
   completeRecord: (id: string) => string | null;
+  createProject: (name: string) => string | null;
+  createChildTask: (parentId: string, name: string) => string | null;
+  setTaskStatus: (nodeId: string, status: string) => string | null;
+  setTaskVisibility: (projectId: string, mode: VisibilityMode, visibleAccounts: string[]) => string | null;
+  removeLeafTask: (nodeId: string) => string | null;
+  removeProject: (projectId: string) => string | null;
+  restoreRemovedProject: (projectId: string) => string | null;
+  inviteToTask: (nodeId: string, target: string, kind: "add" | "transfer") => string | null;
+  withdrawTaskInvite: (inviteId: string) => string | null;
+  answerTaskInvite: (inviteId: string, accept: boolean) => string | null;
+  addTaskNote: (nodeId: string, title: string) => string | null;
+  toggleTaskNote: (nodeId: string, noteId: string) => string | null;
+  addTaskLink: (nodeId: string, url: string) => string | null;
+  moveTaskLink: (nodeId: string, linkId: string, direction: -1 | 1) => string | null;
   developer: boolean;
   developerLogin: (account: string, password: string) => string | null;
   developerLogout: () => void;
@@ -139,6 +175,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [permissions, setPermissions] = useState<StaffPermission[]>([]);
   const [records, setRecords] = useState<WorkRecord[]>([]);
   const [tags, setTags] = useState<ProjectTag[]>([]);
+  const [tasks, setTasks] = useState<TaskNode[]>([]);
+  const [invites, setInvites] = useState<TaskInvite[]>([]);
   const [developer, setDeveloper] = useState(false);
   const ready = loadedFor === routeKey;
 
@@ -158,6 +196,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setPermissions([]);
       setRecords([]);
       setTags([]);
+      setTasks([]);
+      setInvites([]);
       setLoadedFor("backend");
       return;
     }
@@ -174,6 +214,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setPermissions([]);
       setRecords([]);
       setTags([]);
+      setTasks([]);
+      setInvites([]);
       setLoadedFor(pathname);
       return;
     }
@@ -188,6 +230,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     setPermissions(bundle.permissions);
     setRecords(bundle.records);
     setTags(bundle.tags);
+    setTasks(bundle.tasks);
+    setInvites(bundle.invites);
     if (found.disabled) {
       const current = loadSession(bundle.users, found.id);
       if (current) saveSession(null);
@@ -215,7 +259,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<OfficeContextValue>(() => {
     function currentBundle(): CompanyBundle {
-      return { users, departments, positions, assignments, permissions, records, tags };
+      return { users, departments, positions, assignments, permissions, records, tags, tasks, invites };
     }
     function writeBundle(next: CompanyBundle) {
       if (!company) return;
@@ -247,6 +291,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       permissions,
       records,
       tags,
+      tasks,
+      invites,
       developer,
       developerLogin(account, password) {
         if (!authenticateDeveloper(account, password)) return "開發人員帳戶或密碼不正確。";
@@ -460,6 +506,161 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         note(session.name, "標為已完成");
         return null;
       },
+      createProject(name) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得建立專案。";
+        const result = createProject(tasks, users, session.account, name, new Date());
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), tasks: result.value });
+        setTasks(result.value);
+        note(session.name, "建立專案");
+        return null;
+      },
+      createChildTask(parentId, name) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得建立節點。";
+        const result = createChild(tasks, users, session.account, parentId, name, new Date());
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), tasks: result.value });
+        setTasks(result.value);
+        note(session.name, "建立下一層");
+        return null;
+      },
+      setTaskStatus(nodeId, status) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得修改節點。";
+        const result = setNodeStatus(tasks, session.account, nodeId, status);
+        if (!result.ok) return result.error;
+        const nextRecords = result.value.completed
+          ? [completionRecord(result.value.completed, session.account, new Date()), ...records]
+          : records;
+        writeBundle({ ...currentBundle(), tasks: result.value.nodes, records: nextRecords });
+        setTasks(result.value.nodes);
+        if (result.value.completed) setRecords(nextRecords);
+        note(session.name, "更新節點狀態");
+        return null;
+      },
+      setTaskVisibility(projectId, mode, visibleAccounts) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得設定可見範圍。";
+        const result = setProjectVisibility(tasks, users, session.account, projectId, mode, visibleAccounts);
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), tasks: result.value });
+        setTasks(result.value);
+        note(session.name, "設定專案可見範圍");
+        return null;
+      },
+      removeLeafTask(nodeId) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得刪除節點。";
+        const result = deleteLeaf(tasks, session.account, nodeId);
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), tasks: result.value });
+        setTasks(result.value);
+        note(session.name, "刪除節點");
+        return null;
+      },
+      removeProject(projectId) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得刪除專案。";
+        const result = deleteProject(tasks, session.account, projectId);
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), tasks: result.value });
+        setTasks(result.value);
+        note(session.name, "刪除專案");
+        return null;
+      },
+      restoreRemovedProject(projectId) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得還原專案。";
+        const result = restoreProject(tasks, session.account, projectId);
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), tasks: result.value });
+        setTasks(result.value);
+        note(session.name, "還原專案");
+        return null;
+      },
+      inviteToTask(nodeId, target, kind) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得邀請。";
+        const result = createInvite(tasks, invites, users, session.account, nodeId, target, kind, new Date());
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), invites: result.value });
+        setInvites(result.value);
+        note(session.name, kind === "transfer" ? "送出轉交" : "送出添加負責人");
+        return null;
+      },
+      withdrawTaskInvite(inviteId) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得撤回邀請。";
+        const result = withdrawInvite(invites, session.account, inviteId);
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), invites: result.value });
+        setInvites(result.value);
+        note(session.name, "撤回邀請");
+        return null;
+      },
+      answerTaskInvite(inviteId, accept) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得回覆邀請。";
+        const result = respondInvite(tasks, invites, session.account, inviteId, accept);
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), tasks: result.value.nodes, invites: result.value.invites });
+        setTasks(result.value.nodes);
+        setInvites(result.value.invites);
+        note(session.name, accept ? "同意邀請" : "拒絕邀請");
+        return null;
+      },
+      addTaskNote(nodeId, title) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得加備註。";
+        const result = addNote(tasks, session.account, nodeId, title, new Date());
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), tasks: result.value });
+        setTasks(result.value);
+        return null;
+      },
+      toggleTaskNote(nodeId, noteId) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得改備註。";
+        const result = toggleNote(tasks, session.account, nodeId, noteId);
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), tasks: result.value });
+        setTasks(result.value);
+        return null;
+      },
+      addTaskLink(nodeId, url) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得加連結。";
+        const result = addLink(tasks, session.account, nodeId, url, new Date());
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), tasks: result.value });
+        setTasks(result.value);
+        return null;
+      },
+      moveTaskLink(nodeId, linkId, direction) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得調整連結。";
+        const result = moveLink(tasks, session.account, nodeId, linkId, direction);
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), tasks: result.value });
+        setTasks(result.value);
+        return null;
+      },
       openCompany(input) {
         if (!developer) return { error: "請先以開發人員登入。", path: "" };
         const store = ensureOfficeStore();
@@ -523,6 +724,8 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     records,
     session,
     tags,
+    tasks,
+    invites,
     users,
   ]);
 

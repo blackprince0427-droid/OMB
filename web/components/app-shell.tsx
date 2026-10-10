@@ -1,14 +1,16 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Building2, CalendarDays, KeyRound, LayoutGrid, ListChecks, NotebookPen, ShieldCheck, Users } from "lucide-react";
+import { Building2, CalendarDays, FolderTree, KeyRound, LayoutGrid, ListChecks, NotebookPen, ShieldCheck, Trash2, Users } from "lucide-react";
 import { AccountView } from "@/components/account-view";
 import { CalendarView } from "@/components/calendar-view";
 import { DepartmentsView } from "@/components/departments-view";
 import { PermissionsView } from "@/components/permissions-view";
 import { FrameLink, FrameNavProvider, type FrameScreen } from "@/components/frame-nav";
 import { OverviewView } from "@/components/overview-view";
+import { DeletedView } from "@/components/deleted-view";
 import { PendingView } from "@/components/pending-view";
+import { ProjectsView } from "@/components/projects-view";
 import { RecordsView } from "@/components/records-view";
 import { UsersView } from "@/components/users-view";
 import { canManageDepartments, canManageUsers } from "@/lib/office";
@@ -29,6 +31,8 @@ const links: {
   { href: "/calendar", screen: "calendar", group: "營運", label: "日曆", icon: CalendarDays, testId: "nav-calendar" },
   { href: "/records", screen: "records", group: "營運", label: "工作紀錄", icon: NotebookPen, testId: "nav-records" },
   { href: "/pending", screen: "pending", group: "營運", label: "未完成工作", icon: ListChecks, testId: "nav-pending" },
+  { href: "/projects", screen: "projects", group: "營運", label: "專案", icon: FolderTree, testId: "nav-projects" },
+  { href: "/deleted", screen: "deleted", group: "營運", label: "刪除頁面", icon: Trash2, testId: "nav-deleted" },
   { href: "/account", screen: "account", group: "帳戶", label: "帳戶", icon: KeyRound, testId: "nav-account" },
   { href: "/users", screen: "users", group: "管理", label: "使用者", icon: Users, testId: "nav-users", ceoOnly: true },
   { href: "/departments", screen: "departments", group: "管理", label: "部門", icon: Building2, testId: "nav-departments", orgOnly: true },
@@ -40,6 +44,8 @@ const screens: Record<FrameScreen, typeof OverviewView> = {
   calendar: CalendarView,
   records: RecordsView,
   pending: PendingView,
+  projects: ProjectsView,
+  deleted: DeletedView,
   account: AccountView,
   users: UsersView,
   departments: DepartmentsView,
@@ -82,7 +88,7 @@ function ShellFrame({
           </div>
           <div>
             <p className="text-[15px] font-bold">小型辦公</p>
-            <p className="text-xs text-[#8b919d]">網頁版 · 第六版</p>
+            <p className="text-xs text-[#8b919d]">網頁版 · 第七版</p>
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto md:block" aria-label="主框架導覽">

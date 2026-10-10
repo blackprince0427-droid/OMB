@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { FrameGate } from "@/components/frame-gate";
 import { LoginScreen } from "@/components/login-screen";
 
-const screens = new Set(["overview", "calendar", "records", "pending", "account", "users", "departments", "permissions"]);
+const screens = new Set(["overview", "calendar", "records", "pending", "account", "users", "departments", "permissions", "projects", "deleted"]);
 
 export default async function CompanyPathPage({
   params,

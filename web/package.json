@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 43123",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test lib/office.test.mts"
+    "test": "node --experimental-strip-types --test lib/office.test.mts lib/tasks.test.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

@@ -1,3 +1,5 @@
+import type { TaskInvite, TaskNode } from "@/lib/tasks";
+
 export const ROLES = ["員工", "HR", "會計", "CEO"] as const;
 
 export type Role = (typeof ROLES)[number];
@@ -35,6 +37,8 @@ export type CompanyBundle = {
   permissions: StaffPermission[];
   records: WorkRecord[];
   tags: ProjectTag[];
+  tasks: TaskNode[];
+  invites: TaskInvite[];
 };
 
 export type OperationLog = {
@@ -237,6 +241,8 @@ export type WorkRecord = {
   workDate: string;
   done: boolean;
   tagId: string;
+  taskNodeId: string;
+  taskLevel: 0 | 1 | 2 | 3 | null;
   updatedAt: string;
 };
 
@@ -551,6 +557,8 @@ export function addWorkRecord(
       workDate,
       done: false,
       tagId,
+      taskNodeId: "",
+      taskLevel: null,
       updatedAt: stamp(now),
     },
   };
@@ -580,7 +588,9 @@ export function updateWorkRecord(
   return {
     ok: true,
     value: records.map((item) =>
-      item.id === id ? { ...item, title, content: input.content.trim(), tagId, updatedAt: stamp(now) } : item,
+      item.id === id
+        ? { ...item, title, content: input.content.trim(), tagId, taskNodeId: item.taskNodeId, taskLevel: item.taskLevel, updatedAt: stamp(now) }
+        : item,
     ),
   };
 }
@@ -679,6 +689,8 @@ export function normalizeWorkRecord(value: unknown): WorkRecord | null {
     workDate,
     done: item.done === true,
     tagId: typeof item.tagId === "string" ? item.tagId : "",
+    taskNodeId: typeof item.taskNodeId === "string" ? item.taskNodeId : "",
+    taskLevel: item.taskLevel === 0 || item.taskLevel === 1 || item.taskLevel === 2 || item.taskLevel === 3 ? item.taskLevel : null,
     updatedAt: item.updatedAt,
   };
 }
@@ -713,6 +725,8 @@ export function emptyBundle(): CompanyBundle {
     permissions: [],
     records: [],
     tags: [],
+    tasks: [],
+    invites: [],
   };
 }
 
@@ -720,11 +734,17 @@ export function isConsolePath(path: string): boolean {
   return path === "/console" || path.startsWith("/console/");
 }
 
-const ROOT_PATHS = new Set(["/", "/overview", "/calendar", "/records", "/pending", "/account", "/users", "/departments", "/permissions"]);
+const ROOT_PATHS = new Set(["/", "/overview", "/calendar", "/records", "/pending", "/account", "/users", "/departments", "/permissions", "/projects", "/deleted"]);
+
+export function stripQuery(path: string): string {
+  const index = path.indexOf("?");
+  return index === -1 ? path : path.slice(0, index);
+}
 
 export function companyBaseFromPath(path: string): string {
-  if (isConsolePath(path) || path === "/" || ROOT_PATHS.has(path)) return "";
-  const segment = path.split("/").filter(Boolean)[0];
+  const pathname = stripQuery(path);
+  if (isConsolePath(pathname) || pathname === "/" || ROOT_PATHS.has(pathname)) return "";
+  const segment = pathname.split("/").filter(Boolean)[0];
   return segment ? `/${segment}` : "";
 }
 

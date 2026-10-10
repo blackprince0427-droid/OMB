@@ -1,15 +1,16 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from "react";
-import { companyBaseFromPath } from "@/lib/office";
+import { companyBaseFromPath, stripQuery } from "@/lib/office";
 
-export type FrameScreen = "overview" | "calendar" | "records" | "pending" | "account" | "users" | "departments" | "permissions";
+export type FrameScreen = "overview" | "calendar" | "records" | "pending" | "account" | "users" | "departments" | "permissions" | "projects" | "deleted";
 
 const FrameNavContext = createContext<(href: string) => void>(() => {});
 
 export function screenFromPath(path: string): FrameScreen {
-  const base = companyBaseFromPath(path);
-  const rest = base ? path.slice(base.length) || "/" : path;
+  const pathname = stripQuery(path);
+  const base = companyBaseFromPath(pathname);
+  const rest = base ? pathname.slice(base.length) || "/" : pathname;
   if (rest.startsWith("/calendar")) return "calendar";
   if (rest.startsWith("/records")) return "records";
   if (rest.startsWith("/pending")) return "pending";
@@ -17,6 +18,8 @@ export function screenFromPath(path: string): FrameScreen {
   if (rest.startsWith("/users")) return "users";
   if (rest.startsWith("/departments")) return "departments";
   if (rest.startsWith("/permissions")) return "permissions";
+  if (rest.startsWith("/projects")) return "projects";
+  if (rest.startsWith("/deleted")) return "deleted";
   return "overview";
 }
 
@@ -37,9 +40,9 @@ export function FrameNavProvider({
 
   function go(href: string) {
     setScreen(screenFromPath(href));
-    if (window.location.pathname !== href) {
-      window.history.pushState(null, "", href);
-    }
+    const current = window.location.pathname + window.location.search;
+    if (current !== href) window.history.pushState(null, "", href);
+    window.dispatchEvent(new Event("omb-nav"));
   }
 
   return <FrameNavContext.Provider value={go}>{children(screen)}</FrameNavContext.Provider>;

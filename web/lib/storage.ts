@@ -18,6 +18,7 @@ import {
   type StaffPermission,
   type WorkRecord,
 } from "@/lib/office";
+import { normalizeTaskInvite, normalizeTaskNode } from "@/lib/tasks";
 
 export const USERS_KEY = "osp-dev-v1-users";
 export const SESSION_KEY = "osp-dev-v1-session";
@@ -252,6 +253,18 @@ function bundleFromUnknown(companyId: string, value: unknown): CompanyBundle {
         })
       : [],
     tags: Array.isArray(source.tags) ? source.tags.filter(isTag) : [],
+    tasks: Array.isArray(source.tasks)
+      ? source.tasks.flatMap((item) => {
+          const node = normalizeTaskNode(item);
+          return node ? [node] : [];
+        })
+      : [],
+    invites: Array.isArray(source.invites)
+      ? source.invites.flatMap((item) => {
+          const invite = normalizeTaskInvite(item);
+          return invite ? [invite] : [];
+        })
+      : [],
   };
 }
 

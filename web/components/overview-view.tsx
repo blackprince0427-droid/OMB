@@ -8,10 +8,22 @@ import { cn } from "@/lib/utils";
 import { useOffice } from "@/components/office-provider";
 
 export function OverviewView() {
-  const { session, users, activity } = useOffice();
+  const { session, users, activity, companyBase } = useOffice();
   if (!session) return null;
   const now = new Date();
   const recent = activity.slice(0, 4);
+  const shortcuts = [
+    { href: "/pending", label: "未完成工作", icon: ListChecks, testId: "open-pending" },
+    { href: "/records", label: "工作紀錄", icon: NotebookPen, testId: "open-records" },
+    { href: "/calendar", label: "日曆", icon: CalendarDays, testId: "open-calendar" },
+    { href: "/account", label: "帳戶", icon: KeyRound, testId: "open-account" },
+    ...(canManageUsers(session.role)
+      ? [{ href: "/users", label: "使用者", icon: Users, testId: "open-users" }]
+      : []),
+    ...(canManageDepartments(session.role)
+      ? [{ href: "/departments", label: "部門", icon: Building2, testId: "open-departments" }]
+      : []),
+  ];
 
   return (
     <div className="mx-auto max-w-[1180px]">
@@ -21,7 +33,7 @@ export function OverviewView() {
         </span>
         <div>
           <h1 className="text-[22px] font-bold">總覽</h1>
-          <p className="text-[13px] text-muted-foreground">主框架狀態、今日與進入日曆的入口</p>
+          <p className="text-[13px] text-muted-foreground">主框架狀態、今日與日曆捷徑</p>
         </div>
       </div>
 
@@ -46,7 +58,7 @@ export function OverviewView() {
           {[
             ["登入驗證", "已通過"],
             ["主框架", "導覽已顯示"],
-            ["日曆入口", "可進入"],
+            ["日曆入口", "可開啟"],
             ["目前使用者", session.role],
           ].map(([title, detail]) => (
             <li key={title} className="text-center">
@@ -85,98 +97,23 @@ export function OverviewView() {
           )}
         </section>
         <section className="rounded-2xl border border-[#e6e8ee] bg-white px-4 py-3.5">
-          <h2 className="mb-1 flex items-center gap-2 text-[15px] font-semibold">
-            <CalendarDays className="size-4 text-[#178a4a]" />
-            本版入口
-          </h2>
-          <div className="flex items-center justify-between gap-3 border-b border-[#f0f1f4] py-3">
-            <div>
-              <p className="text-sm">月視圖日曆</p>
-              <p className="text-xs text-[#8b919d]">七欄、標示今天、上一月／下一月</p>
-            </div>
-            <FrameLink
-              href="/calendar"
-              data-testid="open-calendar"
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-            >
-              進入
-            </FrameLink>
+          <h2 className="mb-3 text-[15px] font-semibold">常用功能</h2>
+          <div className="grid grid-cols-2 gap-2">
+            {shortcuts.map((item) => {
+              const Icon = item.icon;
+              return (
+                <FrameLink
+                  key={item.href}
+                  href={`${companyBase}${item.href}`}
+                  data-testid={item.testId}
+                  className={cn(buttonVariants({ variant: "outline" }), "justify-start")}
+                >
+                  <Icon />
+                  {item.label}
+                </FrameLink>
+              );
+            })}
           </div>
-          <div className="flex items-center justify-between gap-3 py-3">
-            <div>
-              <p className="flex items-center gap-1.5 text-sm">
-                <Users className="size-3.5" />
-                新增使用者
-              </p>
-              <p className="text-xs text-[#8b919d]">
-                {canManageUsers(session.role) ? "僅 CEO。角色於建立時選定。" : "目前角色不可使用。"}
-              </p>
-            </div>
-            {canManageUsers(session.role) ? (
-              <FrameLink href="/users" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-                進入
-              </FrameLink>
-            ) : (
-              <span className="rounded-full bg-[#fff1e4] px-2 py-0.5 text-[11px] font-semibold text-[#b86112]">僅 CEO</span>
-            )}
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-[#f0f1f4] py-3">
-            <div>
-              <p className="flex items-center gap-1.5 text-sm">
-                <NotebookPen className="size-3.5" />
-                工作紀錄
-              </p>
-              <p className="text-xs text-[#8b919d]">只處理自己的紀錄。較高職位可查詢同部門較低職位。</p>
-            </div>
-            <FrameLink href="/records" data-testid="open-records" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              進入
-            </FrameLink>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-[#f0f1f4] py-3">
-            <div>
-              <p className="flex items-center gap-1.5 text-sm">
-                <ListChecks className="size-3.5" />
-                未完成工作
-              </p>
-              <p className="text-xs text-[#8b919d]">只看自己未完成的項目。完成後離開該頁，仍留在工作紀錄。</p>
-            </div>
-            <FrameLink href="/pending" data-testid="open-pending" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              進入
-            </FrameLink>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-[#f0f1f4] py-3">
-            <div>
-              <p className="flex items-center gap-1.5 text-sm">
-                <KeyRound className="size-3.5" />
-                帳戶
-              </p>
-              <p className="text-xs text-[#8b919d]">更改自己的密碼，或登出返回登入頁。</p>
-            </div>
-            <FrameLink href="/account" data-testid="open-account" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              進入
-            </FrameLink>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-[#f0f1f4] py-3">
-            <div>
-              <p className="flex items-center gap-1.5 text-sm">
-                <Building2 className="size-3.5" />
-                部門與職位
-              </p>
-              <p className="text-xs text-[#8b919d]">
-                {canManageDepartments(session.role) ? "CEO 與 HR 可新增部門、職位並指派。" : "目前角色不可使用。"}
-              </p>
-            </div>
-            {canManageDepartments(session.role) ? (
-              <FrameLink href="/departments" data-testid="open-departments" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-                進入
-              </FrameLink>
-            ) : (
-              <span className="rounded-full bg-[#fff1e4] px-2 py-0.5 text-[11px] font-semibold text-[#b86112]">僅 CEO、HR</span>
-            )}
-          </div>
-          <p className="rounded-xl border border-dashed border-[#d8dbe3] bg-[#f8fafc] px-3 py-2.5 text-xs leading-relaxed text-[#667085]">
-            公司網站不做次日通知，也不讓個別權限覆蓋職位順序。工作紀錄不從月視圖進入。角色指派畫面、個人事項與審批路徑仍未納入。建立公司、停用公司與公司基本資料不在公司網站。
-          </p>
         </section>
       </div>
     </div>

@@ -304,7 +304,7 @@ export function deleteProject(nodes: TaskNode[], actor: string, projectId: strin
 
 export function restoreProject(nodes: TaskNode[], actor: string, projectId: string): TaskResult<TaskNode[]> {
   const project = nodes.find((node) => node.id === projectId && node.level === 0 && node.deleted);
-  if (!project) return { ok: false, error: "刪除頁面沒有這個專案。" };
+  if (!project) return { ok: false, error: "刪除紀錄裡沒有這個專案。" };
   if (project.creator !== actor) return { ok: false, error: "只能還原自己建立的專案。" };
   return {
     ok: true,

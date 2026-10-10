@@ -501,7 +501,7 @@ function NodePage({
           className="mt-3"
           onClick={() => {
             const message = office.removeProject(project.id);
-            report(message, "整棵樹已移到刪除頁面。");
+            report(message, "整棵樹已移到刪除紀錄。");
             if (!message) back();
           }}
         >

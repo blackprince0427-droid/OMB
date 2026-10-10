@@ -31,7 +31,7 @@ const links: {
 }[] = [
   { href: "/overview", screen: "overview", group: "營運", label: "總覽", icon: LayoutGrid, testId: "nav-overview" },
   { href: "/calendar", screen: "calendar", group: "營運", label: "日曆", icon: CalendarDays, testId: "nav-calendar" },
-  { href: "/pending", screen: "pending", group: "營運", label: "工作", icon: Briefcase, testId: "nav-work", workHub: true },
+  { href: "/records", screen: "records", group: "營運", label: "工作", icon: Briefcase, testId: "nav-work", workHub: true },
   { href: "/account", screen: "account", group: "帳戶", label: "帳戶", icon: KeyRound, testId: "nav-account" },
   { href: "/users", screen: "users", group: "管理", label: "使用者", icon: Users, testId: "nav-users", ceoOnly: true },
   { href: "/departments", screen: "departments", group: "管理", label: "部門", icon: Building2, testId: "nav-departments", orgOnly: true },

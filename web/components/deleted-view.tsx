@@ -19,7 +19,7 @@ export function DeletedView() {
           <Trash2 className="size-4" />
         </span>
         <div>
-          <h1 className="text-[22px] font-bold">刪除頁面</h1>
+          <h1 className="text-[22px] font-bold">刪除紀錄</h1>
           <p className="text-[13px] text-muted-foreground">這裡存放你刪除的整棵專案樹。還原時，狀態和邀請會一起回來。</p>
         </div>
       </div>

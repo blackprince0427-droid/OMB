@@ -13,7 +13,7 @@ export function OverviewView() {
   const now = new Date();
   const recent = activity.slice(0, 4);
   const shortcuts = [
-    { href: "/pending", label: "工作", icon: Briefcase, testId: "open-work" },
+    { href: "/records", label: "工作", icon: Briefcase, testId: "open-work" },
     { href: "/calendar", label: "日曆", icon: CalendarDays, testId: "open-calendar" },
     { href: "/account", label: "帳戶", icon: KeyRound, testId: "open-account" },
     ...(canManageUsers(session.role)

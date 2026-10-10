@@ -748,6 +748,17 @@ export function companyBaseFromPath(path: string): string {
   return segment ? `/${segment}` : "";
 }
 
+const WORK_PATHS = new Set(["/records", "/pending", "/projects", "/deleted"]);
+
+export function officeRouteKey(path: string): string {
+  const pathname = stripQuery(path);
+  if (isConsolePath(pathname)) return "backend";
+  const base = companyBaseFromPath(pathname);
+  const rest = (base ? pathname.slice(base.length) : pathname) || "/";
+  if (WORK_PATHS.has(rest)) return `${base}::work`;
+  return pathname;
+}
+
 export const DEVELOPER_ACCOUNT = "開發人員";
 export const DEVELOPER_PASSWORD = "開發人員";
 

@@ -32,6 +32,7 @@ import {
   emptyBundle,
   isConsolePath,
   logsForCompany,
+  officeRouteKey,
   parseWebsite,
   reassignWorkRecord,
   stamp,
@@ -161,7 +162,7 @@ const OfficeContext = createContext<OfficeContextValue | null>(null);
 
 export function OfficeProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const routeKey = isConsolePath(pathname) ? "backend" : pathname;
+  const routeKey = officeRouteKey(pathname);
   const companyBase = companyBaseFromPath(pathname);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
@@ -182,9 +183,11 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const store = ensureOfficeStore();
+    const path = window.location.pathname;
     // 登入狀態在瀏覽器裡。首屏要和伺服器一致，所以等掛載後才讀取。
+    // 工作分頁共用同一個 routeKey，切換時不重讀，避免整頁閃回「正在確認登入狀態」。
     /* eslint-disable react-hooks/set-state-in-effect -- localStorage and sessionStorage are not available during SSR */
-    if (isConsolePath(pathname)) {
+    if (isConsolePath(path)) {
       setCompany(null);
       setCompanyState("backend");
       setDeveloper(loadDeveloperSession());
@@ -201,7 +204,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setLoadedFor("backend");
       return;
     }
-    const found = companyForLocation(store.companies, window.location.origin, pathname);
+    const found = companyForLocation(store.companies, window.location.origin, path);
     if (!found) {
       setCompany(null);
       setCompanyState("missing");
@@ -216,7 +219,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setTags([]);
       setTasks([]);
       setInvites([]);
-      setLoadedFor(pathname);
+      setLoadedFor(routeKey);
       return;
     }
     const bundle = store.bundles[found.id] ?? emptyBundle();
@@ -239,9 +242,9 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     } else {
       setSession(loadSession(bundle.users, found.id));
     }
-    setLoadedFor(pathname);
+    setLoadedFor(routeKey);
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [pathname]);
+  }, [routeKey]);
 
   useEffect(() => {
     if (!company) return;

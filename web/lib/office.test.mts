@@ -30,6 +30,7 @@ import {
   dateStamp,
   daysInMonth,
   logsForCompany,
+  officeRouteKey,
   monthMatrix,
   HANDOFF_COPY,
   normalizeStaffPermission,
@@ -454,6 +455,15 @@ test("開發人員登入不使用公司帳戶", () => {
 
 test("公司網站與後台的路徑分開", () => {
   assert.equal(companyForLocation([defaultCompany()], "http://127.0.0.1:43123", "/console"), null);
+});
+
+test("工作分頁共用同一個資料鍵，切換時不當成換頁", () => {
+  assert.equal(officeRouteKey("/pending"), officeRouteKey("/projects"));
+  assert.equal(officeRouteKey("/records"), officeRouteKey("/deleted?node=1"));
+  assert.equal(officeRouteKey("/acme/pending"), officeRouteKey("/acme/projects"));
+  assert.notEqual(officeRouteKey("/pending"), officeRouteKey("/overview"));
+  assert.notEqual(officeRouteKey("/acme/pending"), officeRouteKey("/pending"));
+  assert.equal(officeRouteKey("/console"), "backend");
 });
 
 test("CEO 與 HR 可指派角色，儲存後再登入仍是新角色", () => {

@@ -50,10 +50,18 @@ export function WorkView({ tab }: { tab: FrameScreen }) {
           </Button>
         ))}
       </div>
-      {tab === "pending" ? <PendingView /> : null}
-      {tab === "projects" ? <ProjectsView /> : null}
-      {tab === "records" ? <RecordsView /> : null}
-      {tab === "deleted" ? <DeletedView /> : null}
+      <div hidden={tab !== "pending"}>
+        <PendingView />
+      </div>
+      <div hidden={tab !== "projects"}>
+        <ProjectsView />
+      </div>
+      <div hidden={tab !== "records"}>
+        <RecordsView />
+      </div>
+      <div hidden={tab !== "deleted"}>
+        <DeletedView />
+      </div>
     </div>
   );
 }

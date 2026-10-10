@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CalendarDays, FolderTree, KeyRound, LayoutGrid, ListChecks, NotebookPen, ShieldCheck, Users } from "lucide-react";
+import { Briefcase, Building2, CalendarDays, KeyRound, LayoutGrid, ShieldCheck, Users } from "lucide-react";
 import { FrameLink } from "@/components/frame-nav";
 import { buttonVariants } from "@/components/ui/button";
 import { canManageDepartments, canManageUsers, daysInMonth } from "@/lib/office";
@@ -13,9 +13,7 @@ export function OverviewView() {
   const now = new Date();
   const recent = activity.slice(0, 4);
   const shortcuts = [
-    { href: "/pending", label: "未完成工作", icon: ListChecks, testId: "open-pending" },
-    { href: "/projects", label: "專案", icon: FolderTree, testId: "open-projects" },
-    { href: "/records", label: "工作紀錄", icon: NotebookPen, testId: "open-records" },
+    { href: "/pending", label: "工作", icon: Briefcase, testId: "open-work" },
     { href: "/calendar", label: "日曆", icon: CalendarDays, testId: "open-calendar" },
     { href: "/account", label: "帳戶", icon: KeyRound, testId: "open-account" },
     ...(canManageUsers(session.role)

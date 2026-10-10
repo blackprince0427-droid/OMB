@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Building2, CalendarDays, FolderTree, KeyRound, LayoutGrid, ListChecks, NotebookPen, ShieldCheck, Trash2, Users } from "lucide-react";
+import { Briefcase, Building2, CalendarDays, KeyRound, LayoutGrid, ShieldCheck, Users } from "lucide-react";
 import { AccountView } from "@/components/account-view";
 import { CalendarView } from "@/components/calendar-view";
 import { DepartmentsView } from "@/components/departments-view";
@@ -13,6 +13,7 @@ import { PendingView } from "@/components/pending-view";
 import { ProjectsView } from "@/components/projects-view";
 import { RecordsView } from "@/components/records-view";
 import { UsersView } from "@/components/users-view";
+import { isWorkScreen, WorkView } from "@/components/work-view";
 import { canManageDepartments, canManageUsers } from "@/lib/office";
 import { useOffice } from "@/components/office-provider";
 import { cn } from "@/lib/utils";
@@ -24,15 +25,13 @@ const links: {
   label: string;
   icon: typeof LayoutGrid;
   testId: string;
+  workHub?: boolean;
   ceoOnly?: boolean;
   orgOnly?: boolean;
 }[] = [
   { href: "/overview", screen: "overview", group: "營運", label: "總覽", icon: LayoutGrid, testId: "nav-overview" },
   { href: "/calendar", screen: "calendar", group: "營運", label: "日曆", icon: CalendarDays, testId: "nav-calendar" },
-  { href: "/records", screen: "records", group: "營運", label: "工作紀錄", icon: NotebookPen, testId: "nav-records" },
-  { href: "/pending", screen: "pending", group: "營運", label: "未完成工作", icon: ListChecks, testId: "nav-pending" },
-  { href: "/projects", screen: "projects", group: "營運", label: "專案", icon: FolderTree, testId: "nav-projects" },
-  { href: "/deleted", screen: "deleted", group: "營運", label: "刪除頁面", icon: Trash2, testId: "nav-deleted" },
+  { href: "/pending", screen: "pending", group: "營運", label: "工作", icon: Briefcase, testId: "nav-work", workHub: true },
   { href: "/account", screen: "account", group: "帳戶", label: "帳戶", icon: KeyRound, testId: "nav-account" },
   { href: "/users", screen: "users", group: "管理", label: "使用者", icon: Users, testId: "nav-users", ceoOnly: true },
   { href: "/departments", screen: "departments", group: "管理", label: "部門", icon: Building2, testId: "nav-departments", orgOnly: true },
@@ -94,7 +93,7 @@ function ShellFrame({
         <nav className="flex gap-1 overflow-x-auto md:block" aria-label="主框架導覽">
           {visible.map((link, index) => {
             const group = index === 0 || visible[index - 1].group !== link.group ? link.group : "";
-            const active = screen === link.screen;
+            const active = link.workHub ? isWorkScreen(screen) : screen === link.screen;
             const Icon = link.icon;
             return (
               <div key={link.href} className="md:contents">
@@ -138,7 +137,7 @@ function ShellFrame({
           </span>
         </div>
         <div className="px-4 pb-8 md:px-7">
-          <Screen />
+          {isWorkScreen(screen) ? <WorkView tab={screen} /> : <Screen />}
         </div>
       </section>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CalendarDays, KeyRound, LayoutGrid, ListChecks, NotebookPen, Users } from "lucide-react";
+import { Building2, CalendarDays, KeyRound, LayoutGrid, ListChecks, NotebookPen, ShieldCheck, Users } from "lucide-react";
 import { FrameLink } from "@/components/frame-nav";
 import { buttonVariants } from "@/components/ui/button";
 import { canManageDepartments, canManageUsers, daysInMonth } from "@/lib/office";
@@ -126,7 +126,7 @@ export function OverviewView() {
                 <NotebookPen className="size-3.5" />
                 工作紀錄
               </p>
-              <p className="text-xs text-[#8b919d]">只處理自己的紀錄。較高職位可查詢同部門較低職位。</p>
+              <p className="text-xs text-[#8b919d]">可指定歸屬與專案標籤。未覆蓋時，較高職位可查詢同部門較低職位。</p>
             </div>
             <FrameLink href="/records" data-testid="open-records" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
               進入
@@ -174,8 +174,26 @@ export function OverviewView() {
               <span className="rounded-full bg-[#fff1e4] px-2 py-0.5 text-[11px] font-semibold text-[#b86112]">僅 CEO、HR</span>
             )}
           </div>
+          <div className="flex items-center justify-between gap-3 border-t border-[#f0f1f4] py-3">
+            <div>
+              <p className="flex items-center gap-1.5 text-sm">
+                <ShieldCheck className="size-3.5" />
+                權限指派
+              </p>
+              <p className="text-xs text-[#8b919d]">
+                {canManageDepartments(session.role) ? "CEO 與 HR 可調整角色或個別權限。" : "目前角色不可使用。"}
+              </p>
+            </div>
+            {canManageDepartments(session.role) ? (
+              <FrameLink href="/permissions" data-testid="open-permissions-overview" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+                進入
+              </FrameLink>
+            ) : (
+              <span className="rounded-full bg-[#fff1e4] px-2 py-0.5 text-[11px] font-semibold text-[#b86112]">僅 CEO、HR</span>
+            )}
+          </div>
           <p className="rounded-xl border border-dashed border-[#d8dbe3] bg-[#f8fafc] px-3 py-2.5 text-xs leading-relaxed text-[#667085]">
-            公司網站不做次日通知，也不讓個別權限覆蓋職位順序。工作紀錄不從月視圖進入。角色指派畫面、個人事項與審批路徑仍未納入。建立公司、停用公司與公司基本資料不在公司網站。
+            公司網站不做次日通知。工作紀錄不從月視圖進入。個人事項與審批路徑仍未納入。建立公司、停用公司與公司基本資料不在公司網站。跨人只限同一瀏覽器輪流登入，沒有即時通知。
           </p>
         </section>
       </div>

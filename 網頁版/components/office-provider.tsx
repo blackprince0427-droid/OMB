@@ -12,10 +12,13 @@ import { usePathname } from "next/navigation";
 import {
   addDepartment,
   addPosition,
+  addProjectTag,
   addUser,
   addWorkRecord,
   appendOperationLog,
   assignMember,
+  assignRole,
+  assignStaffAccess,
   authenticate,
   authenticateDeveloper,
   canManageDepartments,
@@ -30,7 +33,7 @@ import {
   isConsolePath,
   logsForCompany,
   parseWebsite,
-  setStaffPermission,
+  reassignWorkRecord,
   stamp,
   updateWorkRecord,
   type Assignment,
@@ -39,6 +42,7 @@ import {
   type Department,
   type OfficeUser,
   type Position,
+  type ProjectTag,
   type Role,
   type Session,
   type StaffPermission,
@@ -80,6 +84,7 @@ type OfficeContextValue = {
   assignments: Assignment[];
   permissions: StaffPermission[];
   records: WorkRecord[];
+  tags: ProjectTag[];
   login: (account: string, password: string) => string | null;
   createUser: (input: {
     name: string;
@@ -91,11 +96,15 @@ type OfficeContextValue = {
   createPosition: (input: { departmentId: string; name: string; rank: string }) => string | null;
   assignToDepartment: (input: { account: string; departmentId: string; positionId: string }) => string | null;
   saveStaffPermission: (account: string, note: string) => string | null;
+  assignAccountRole: (account: string, role: Role) => string | null;
+  saveAccountAccess: (input: { account: string; note: string; override: boolean; visibleAccounts: string[] }) => string | null;
   changeOwnPassword: (oldPassword: string, newPassword: string) => string | null;
   logout: () => void;
   changeMemberPosition: (input: { account: string; departmentId: string; positionId: string }) => string | null;
-  createRecord: (input: { title: string; content: string; workDate?: string }) => string | null;
-  editRecord: (id: string, input: { title: string; content: string }) => string | null;
+  createRecord: (input: { title: string; content: string; workDate?: string; assignee?: string; tagId?: string }) => string | null;
+  editRecord: (id: string, input: { title: string; content: string; tagId?: string }) => string | null;
+  reassignRecord: (id: string, assignee: string) => string | null;
+  createTag: (name: string) => string | null;
   completeRecord: (id: string) => string | null;
   developer: boolean;
   developerLogin: (account: string, password: string) => string | null;
@@ -129,6 +138,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [permissions, setPermissions] = useState<StaffPermission[]>([]);
   const [records, setRecords] = useState<WorkRecord[]>([]);
+  const [tags, setTags] = useState<ProjectTag[]>([]);
   const [developer, setDeveloper] = useState(false);
   const ready = loadedFor === routeKey;
 
@@ -147,6 +157,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setAssignments([]);
       setPermissions([]);
       setRecords([]);
+      setTags([]);
       setLoadedFor("backend");
       return;
     }
@@ -162,6 +173,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       setAssignments([]);
       setPermissions([]);
       setRecords([]);
+      setTags([]);
       setLoadedFor(pathname);
       return;
     }
@@ -175,6 +187,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     setAssignments(bundle.assignments);
     setPermissions(bundle.permissions);
     setRecords(bundle.records);
+    setTags(bundle.tags);
     if (found.disabled) {
       const current = loadSession(bundle.users, found.id);
       if (current) saveSession(null);
@@ -202,7 +215,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<OfficeContextValue>(() => {
     function currentBundle(): CompanyBundle {
-      return { users, departments, positions, assignments, permissions, records };
+      return { users, departments, positions, assignments, permissions, records, tags };
     }
     function writeBundle(next: CompanyBundle) {
       if (!company) return;
@@ -233,6 +246,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       assignments,
       permissions,
       records,
+      tags,
       developer,
       developerLogin(account, password) {
         if (!authenticateDeveloper(account, password)) return "開發人員帳戶或密碼不正確。";
@@ -320,11 +334,46 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       saveStaffPermission(account, noteText) {
         const halt = stopped();
         if (halt) return halt;
-        const result = setStaffPermission(users, permissions, account, noteText);
+        if (!session || !canManageDepartments(session.role)) return "沒有權限指派個別權限。";
+        const existing = permissions.find((item) => item.account === account.trim());
+        const result = assignStaffAccess(users, permissions, session.role, {
+          account,
+          note: noteText,
+          override: existing?.override === true,
+          visibleAccounts: existing?.visibleAccounts ?? [],
+        });
         if (!result.ok) return result.error;
         writeBundle({ ...currentBundle(), permissions: result.value });
         setPermissions(result.value);
-        note(session?.name ?? "CEO", "記錄個別權限");
+        note(session.name, "記錄個別權限");
+        return null;
+      },
+      assignAccountRole(account, role) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得指派角色。";
+        const result = assignRole(users, session.role, account, role);
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), users: result.value });
+        setUsers(result.value);
+        const updated = result.value.find((user) => user.account === account.trim());
+        if (updated && session.account === updated.account) {
+          const next = { ...session, role: updated.role };
+          saveSession(next);
+          setSession(next);
+        }
+        note(session.name, `指派角色 ${account.trim()}`);
+        return null;
+      },
+      saveAccountAccess(input) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得指派個別權限。";
+        const result = assignStaffAccess(users, permissions, session.role, input);
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), permissions: result.value });
+        setPermissions(result.value);
+        note(session.name, "指派個別權限");
         return null;
       },
       changeOwnPassword(oldPassword, newPassword) {
@@ -358,7 +407,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         const halt = stopped();
         if (halt) return halt;
         if (!session) return "未登入不得處理工作紀錄。";
-        const result = addWorkRecord(records, session.account, input, new Date());
+        const result = addWorkRecord(records, session.account, input, new Date(), { users, tags });
         if (!result.ok) return result.error;
         const next = [result.value, ...records];
         writeBundle({ ...currentBundle(), records: next });
@@ -370,11 +419,34 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         const halt = stopped();
         if (halt) return halt;
         if (!session) return "未登入不得處理工作紀錄。";
-        const result = updateWorkRecord(records, session.account, id, input, new Date());
+        const result = updateWorkRecord(records, session.account, id, input, new Date(), tags);
         if (!result.ok) return result.error;
         writeBundle({ ...currentBundle(), records: result.value });
         setRecords(result.value);
         note(session.name, "修改工作紀錄");
+        return null;
+      },
+      reassignRecord(id, assignee) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得處理工作紀錄。";
+        const result = reassignWorkRecord(records, session.account, id, assignee, users, new Date());
+        if (!result.ok) return result.error;
+        writeBundle({ ...currentBundle(), records: result.value });
+        setRecords(result.value);
+        note(session.name, "分交工作紀錄");
+        return null;
+      },
+      createTag(name) {
+        const halt = stopped();
+        if (halt) return halt;
+        if (!session) return "未登入不得建立標籤。";
+        const result = addProjectTag(tags, name, new Date());
+        if (!result.ok) return result.error;
+        const next = [...tags, result.value];
+        writeBundle({ ...currentBundle(), tags: next });
+        setTags(next);
+        note(session.name, `新增標籤 ${result.value.name}`);
         return null;
       },
       completeRecord(id) {
@@ -450,6 +522,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     ready,
     records,
     session,
+    tags,
     users,
   ]);
 

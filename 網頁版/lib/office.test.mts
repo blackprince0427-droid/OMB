@@ -3,16 +3,22 @@ import test from "node:test";
 import {
   addDepartment,
   addPosition,
+  addProjectTag,
   addUser,
   addWorkRecord,
   appendOperationLog,
   assignMember,
+  assignRole,
+  assignStaffAccess,
   authenticate,
+  canEditWorkRecord,
   canManageDepartments,
   canManageUsers,
   authenticateDeveloper,
   canQueryAccount,
   changePassword,
+  CROSS_PERSON_COPY,
+  crossPersonTodos,
   companyForLocation,
   createCompany,
   createCompanyWithInitialCeo,
@@ -25,9 +31,13 @@ import {
   daysInMonth,
   logsForCompany,
   monthMatrix,
+  HANDOFF_COPY,
+  normalizeStaffPermission,
   normalizeWorkRecord,
   pageOf,
+  reassignWorkRecord,
   recordsForAccount,
+  recordsWithTag,
   seedUsers,
   setStaffPermission,
   unfinishedRecords,
@@ -329,6 +339,8 @@ test("舊工作紀錄補上日期與未完成", () => {
   });
   assert.equal(record?.workDate, "2026-10-01");
   assert.equal(record?.done, false);
+  assert.equal(record?.assignee, "CEO");
+  assert.equal(record?.tagId, "");
 });
 
 test("只限後台建立公司，新公司沒有預設帳戶", () => {
@@ -442,6 +454,200 @@ test("開發人員登入不使用公司帳戶", () => {
 
 test("公司網站與後台的路徑分開", () => {
   assert.equal(companyForLocation([defaultCompany()], "http://127.0.0.1:43123", "/console"), null);
+});
+
+test("CEO 與 HR 可指派角色，儲存後再登入仍是新角色", () => {
+  const created = addUser(seedUsers(), { name: "陳可恩", account: "HR01", password: "secret", role: "員工" }, now);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  const users = [...seedUsers(), created.user];
+  assert.equal(assignRole(users, "員工", "HR01", "HR").ok, false);
+  assert.equal(assignRole(users, "會計", "HR01", "CEO").ok, false);
+  const byHr = assignRole(users, "HR", "HR01", "會計");
+  assert.equal(byHr.ok, true);
+  if (!byHr.ok) return;
+  const restored = JSON.parse(JSON.stringify(byHr.value)) as typeof users;
+  assert.equal(authenticate(restored, "HR01", "secret")?.role, "會計");
+  assert.equal(assignRole(restored, "CEO", "CEO", "員工").ok, false);
+  assert.equal(restored.find((user) => user.account === "CEO")?.role, "CEO");
+});
+
+test("個別權限覆蓋開啟後可見範圍不以職位順序為唯一依據", () => {
+  const positions: Position[] = [
+    { id: "p-high", departmentId: "d1", name: "主任", rank: 2, createdAt: "" },
+    { id: "p-low", departmentId: "d1", name: "職員", rank: 1, createdAt: "" },
+    { id: "p-same", departmentId: "d1", name: "同級", rank: 2, createdAt: "" },
+    { id: "p-sales", departmentId: "d2", name: "主任", rank: 9, createdAt: "" },
+  ];
+  const assignments: Assignment[] = [
+    { account: "LEAD", departmentId: "d1", positionId: "p-high" },
+    { account: "CLERK", departmentId: "d1", positionId: "p-low" },
+    { account: "PEER", departmentId: "d1", positionId: "p-same" },
+    { account: "OTHER", departmentId: "d2", positionId: "p-sales" },
+  ];
+  const users = ["LEAD", "CLERK", "PEER", "OTHER"].map((account) => ({
+    ...seedUsers()[0],
+    account,
+    role: "員工" as const,
+  }));
+  const noted = setStaffPermission(users, [], "CLERK", "先記備註");
+  assert.equal(noted.ok, true);
+  if (!noted.ok) return;
+  assert.equal(canQueryAccount(assignments, positions, "CLERK", "LEAD", noted.value), false);
+  assert.equal(canQueryAccount(assignments, positions, "LEAD", "CLERK", noted.value), true);
+
+  const blocked = assignStaffAccess(users, [], "員工", {
+    account: "CLERK",
+    note: "越權",
+    override: true,
+    visibleAccounts: ["LEAD"],
+  });
+  assert.equal(blocked.ok, false);
+
+  const opened = assignStaffAccess(users, [], "CEO", {
+    account: "CLERK",
+    note: "可看主任",
+    override: true,
+    visibleAccounts: ["LEAD", "OTHER"],
+  });
+  assert.equal(opened.ok, true);
+  if (!opened.ok) return;
+  const restored = JSON.parse(JSON.stringify(opened.value)).flatMap((item: unknown) => {
+    const permission = normalizeStaffPermission(item);
+    return permission ? [permission] : [];
+  });
+  assert.equal(restored[0]?.override, true);
+  assert.deepEqual(restored[0]?.visibleAccounts, ["LEAD", "OTHER"]);
+  assert.equal(canQueryAccount(assignments, positions, "CLERK", "LEAD", restored), true);
+  assert.equal(canQueryAccount(assignments, positions, "CLERK", "OTHER", restored), false);
+  assert.equal(canQueryAccount(assignments, positions, "CLERK", "PEER", restored), false);
+
+  const replaced = assignStaffAccess(users, [], "HR", {
+    account: "LEAD",
+    note: "",
+    override: true,
+    visibleAccounts: [],
+  });
+  assert.equal(replaced.ok, true);
+  if (!replaced.ok) return;
+  assert.equal(canQueryAccount(assignments, positions, "LEAD", "CLERK", replaced.value), false);
+
+  const peer = assignStaffAccess(users, [], "HR", {
+    account: "PEER",
+    note: "同級可見",
+    override: true,
+    visibleAccounts: ["LEAD"],
+  });
+  assert.equal(peer.ok, true);
+  if (!peer.ok) return;
+  assert.equal(canQueryAccount(assignments, positions, "PEER", "LEAD", peer.value), true);
+  assert.equal(canQueryAccount(assignments, positions, "LEAD", "PEER"), false);
+});
+
+test("分交後只有新歸屬者可以修改與完成", () => {
+  const users = [
+    { ...seedUsers()[0], account: "A", name: "甲" },
+    { ...seedUsers()[0], account: "B", name: "乙" },
+  ];
+  const created = addWorkRecord([], "A", { title: "對帳", content: "上午", assignee: "A" }, now, { users });
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  assert.equal(canEditWorkRecord(created.value, "A"), true);
+  assert.equal(canEditWorkRecord(created.value, "B"), false);
+  assert.equal(updateWorkRecord([created.value], "B", created.value.id, { title: "改掉", content: "" }, now).ok, false);
+  const handed = reassignWorkRecord([created.value], "A", created.value.id, "B", users, now);
+  assert.equal(handed.ok, true);
+  if (!handed.ok) return;
+  assert.equal(handed.value[0]?.assignee, "B");
+  assert.equal("notified" in handed.value[0], false);
+  assert.equal(updateWorkRecord(handed.value, "A", created.value.id, { title: "原歸屬再改", content: "" }, now).ok, false);
+  assert.equal(completeWorkRecord(handed.value, "A", created.value.id, now).ok, false);
+  assert.equal(reassignWorkRecord(handed.value, "A", created.value.id, "A", users, now).ok, false);
+  const edited = updateWorkRecord(handed.value, "B", created.value.id, { title: "新歸屬已改", content: "下午" }, now);
+  assert.equal(edited.ok, true);
+  if (!edited.ok) return;
+  assert.equal(edited.value[0]?.title, "新歸屬已改");
+  const done = completeWorkRecord(edited.value, "B", created.value.id, now);
+  assert.equal(done.ok, true);
+  if (!done.ok) return;
+  assert.equal(done.value[0]?.done, true);
+  assert.match(HANDOFF_COPY, /同一瀏覽器輪流登入/);
+  assert.match(HANDOFF_COPY, /沒有即時通知/);
+});
+
+test("跨人待辦依歸屬與權限聚合，文案寫明同一瀏覽器輪流登入", () => {
+  const positions: Position[] = [
+    { id: "p-high", departmentId: "d1", name: "主任", rank: 2, createdAt: "" },
+    { id: "p-low", departmentId: "d1", name: "職員", rank: 1, createdAt: "" },
+  ];
+  const assignments: Assignment[] = [
+    { account: "LEAD", departmentId: "d1", positionId: "p-high" },
+    { account: "CLERK", departmentId: "d1", positionId: "p-low" },
+  ];
+  const users = [
+    { ...seedUsers()[0], account: "LEAD" },
+    { ...seedUsers()[0], account: "CLERK" },
+  ];
+  const mine = addWorkRecord([], "LEAD", { title: "自己的", content: "" }, now, { users });
+  const handed = addWorkRecord([], "LEAD", { title: "分給職員", content: "", assignee: "CLERK" }, now, { users });
+  const clerkOwn = addWorkRecord([], "CLERK", { title: "職員自己的", content: "" }, now, { users });
+  assert.equal(mine.ok && handed.ok && clerkOwn.ok, true);
+  if (!mine.ok || !handed.ok || !clerkOwn.ok) return;
+  const records = [mine.value, handed.value, clerkOwn.value];
+  const clerk = crossPersonTodos(records, "CLERK", assignments, positions, []);
+  assert.deepEqual(clerk.assignedToMe.map((item) => item.title), ["分給職員"]);
+  assert.deepEqual(clerk.visibleToMe.map((item) => item.title), []);
+  const lead = crossPersonTodos(records, "LEAD", assignments, positions, []);
+  assert.deepEqual(lead.assignedToMe.map((item) => item.title), []);
+  assert.deepEqual(lead.visibleToMe.map((item) => item.title), ["分給職員", "職員自己的"]);
+  const done = completeWorkRecord(records, "CLERK", clerkOwn.value.id, now);
+  assert.equal(done.ok, true);
+  if (!done.ok) return;
+  assert.deepEqual(crossPersonTodos(done.value, "LEAD", assignments, positions, []).visibleToMe.map((item) => item.title), ["分給職員"]);
+  const override = assignStaffAccess(users, [], "CEO", {
+    account: "CLERK",
+    note: "",
+    override: true,
+    visibleAccounts: ["LEAD"],
+  });
+  assert.equal(override.ok, true);
+  if (!override.ok) return;
+  const widened = crossPersonTodos(records, "CLERK", assignments, positions, override.value);
+  assert.deepEqual(widened.visibleToMe.map((item) => item.title), ["自己的"]);
+  assert.match(CROSS_PERSON_COPY, /同一瀏覽器/);
+  assert.match(CROSS_PERSON_COPY, /輪流登入/);
+  assert.match(CROSS_PERSON_COPY, /沒有即時通知/);
+  assert.match(CROSS_PERSON_COPY, /不是即時多人同時協作/);
+});
+
+test("專案標籤可建立並寫入紀錄，列表可依標籤辨識", () => {
+  const empty = addProjectTag([], "  ", now);
+  assert.equal(empty.ok, false);
+  const created = addProjectTag([], " 甲案 ", now);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  assert.equal(created.value.name, "甲案");
+  assert.equal(addProjectTag([created.value], "甲案", now).ok, false);
+  const users = seedUsers();
+  const missing = addWorkRecord([], "CEO", { title: "沒有標籤", content: "", tagId: "missing" }, now, { users, tags: [created.value] });
+  assert.equal(missing.ok, false);
+  const tagged = addWorkRecord([], "CEO", { title: "有標籤", content: "內容", tagId: created.value.id }, now, {
+    users,
+    tags: [created.value],
+  });
+  const plain = addWorkRecord([], "CEO", { title: "無標籤", content: "" }, now, { users, tags: [created.value] });
+  assert.equal(tagged.ok && plain.ok, true);
+  if (!tagged.ok || !plain.ok) return;
+  const records = [tagged.value, plain.value];
+  assert.equal(recordsWithTag(records, created.value.id).length, 1);
+  assert.equal(recordsWithTag(records, created.value.id)[0]?.title, "有標籤");
+  const restored = normalizeWorkRecord(JSON.parse(JSON.stringify(tagged.value)));
+  assert.equal(restored?.tagId, created.value.id);
+  assert.equal(restored?.assignee, "CEO");
+  const cleared = updateWorkRecord(records, "CEO", tagged.value.id, { title: "有標籤", content: "內容", tagId: "" }, now, [created.value]);
+  assert.equal(cleared.ok, true);
+  if (!cleared.ok) return;
+  assert.equal(recordsWithTag(cleared.value, created.value.id).length, 0);
 });
 
 test("月視圖由星期日開始，並鋪滿當月", () => {

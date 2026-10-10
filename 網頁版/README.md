@@ -15,6 +15,25 @@ npm run open
 
 目前這個網站的資料屬於「預設公司」，預設帳戶與密碼都是 `CEO`。登入狀態存在 `sessionStorage`（鍵名 `osp-dev-v1-session`），留在目前這個分頁。可在「帳戶」登出並返回登入頁。公司、各公司的帳戶與工作資料存在 `localStorage`，鍵名是 `osp-dev-v4-companies` 與 `osp-dev-v4-bundles`。清除這個網站的資料後，會回到預設公司的 CEO 帳戶。
 
+## 固定網址（Vercel）
+
+線上交付是固定網址的網頁。推送到 GitHub 的 `main` 之後，Vercel 會自動重新建置並更新那個網址。資料仍只在該瀏覽器的 `localStorage`／`sessionStorage`（換瀏覽器或清掉網站資料就沒有了）。沒有後端，也沒有跨裝置同步。
+
+倉庫裡還沒有接上 Vercel。要上線必須先由心夜同意合併部署設定，再到 Vercel 做一次連接。連接完成後，之後每次推上 `main` 就會自動更新，不需要再改專案設定。
+
+這次開發機上的 Cloudflare 臨時網址只在該次會話有效，不是固定網址。
+
+### 心夜要做的一次設定
+
+1. 用要綁定的 GitHub 帳號登入 [Vercel](https://vercel.com)，選 **Add New… → Project**，匯入 `blackprince0427-droid/OMB`。
+2. **Root Directory** 設為 `網頁版`（字要完全一樣）。倉庫根目錄沒有 `package.json`，不設這項就不會辨認成 Next.js。
+3. Framework Preset 維持 **Next.js**。Build Command 用 `npm run build`，Install Command 用 `npm install`。這兩項已寫在 `網頁版/vercel.json`。不要改 Output Directory。
+4. **不需要環境變數。** Node.js 用 20.9 或更新（`package.json` 的 `engines`）。
+5. Production Branch 選 `main`。確認 Git 自動部署是開的（Vercel 匯入 GitHub 倉庫後的預設）。
+6. 按 Deploy。第一次部署的是當時 `main` 上的程式。之後只要有人把變更合併進 `main`，同一個網址會自動換成新版本。
+
+本機 `npm start` 仍綁在 43123，只給自己開機用。Vercel 不走這條指令，改由它自己的 Next.js 執行環境提供網站。
+
 ## 第一版做了什麼
 
 - 登入。未登入不能進入主框架。預設帳戶與密碼都是 `CEO`。

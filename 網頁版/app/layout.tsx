@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { OfficeProvider } from "@/components/office-provider";
 import "./globals.css";
@@ -11,7 +12,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="zh-Hant" className="h-full antialiased">
       <body className="min-h-full">
-        <OfficeProvider>{children}</OfficeProvider>
+        <Suspense
+          fallback={
+            <main className="grid min-h-svh place-items-center text-sm text-muted-foreground">
+              正在確認登入狀態
+            </main>
+          }
+        >
+          <OfficeProvider>{children}</OfficeProvider>
+        </Suspense>
       </body>
     </html>
   );

@@ -37,3 +37,7 @@
 ## 開啟
 
 見 `網頁版/README.md`。
+
+## 固定網址
+
+網頁版準備用 Vercel 做固定網址。專案的 Root Directory 必須是 `網頁版`。推送到 GitHub `main` 後，線上網頁會自動更新；資料仍只在該瀏覽器的 localStorage，沒有後端同步。還沒接上 Vercel，合併與第一次連接都要心夜同意。步驟見 `網頁版/README.md` 的「固定網址（Vercel）」。

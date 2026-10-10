@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CalendarDays, KeyRound, LayoutGrid, ListChecks, NotebookPen, Users } from "lucide-react";
+import { Building2, CalendarDays, KeyRound, LayoutGrid, ListChecks, NotebookPen, ShieldCheck, Users } from "lucide-react";
 import { FrameLink } from "@/components/frame-nav";
 import { buttonVariants } from "@/components/ui/button";
 import { canManageDepartments, canManageUsers, daysInMonth } from "@/lib/office";
@@ -21,7 +21,10 @@ export function OverviewView() {
       ? [{ href: "/users", label: "使用者", icon: Users, testId: "open-users" }]
       : []),
     ...(canManageDepartments(session.role)
-      ? [{ href: "/departments", label: "部門", icon: Building2, testId: "open-departments" }]
+      ? [
+          { href: "/departments", label: "部門", icon: Building2, testId: "open-departments" },
+          { href: "/permissions", label: "權限指派", icon: ShieldCheck, testId: "open-permissions" },
+        ]
       : []),
   ];
 
@@ -50,7 +53,7 @@ export function OverviewView() {
               </p>
             </div>
           </div>
-          <FrameLink href="/calendar" className={cn(buttonVariants({ variant: "outline" }))}>
+          <FrameLink href={`${companyBase}/calendar`} className={cn(buttonVariants({ variant: "outline" }))}>
             打開日曆
           </FrameLink>
         </div>

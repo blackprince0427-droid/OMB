@@ -34,6 +34,7 @@ export type CompanyBundle = {
   assignments: Assignment[];
   permissions: StaffPermission[];
   records: WorkRecord[];
+  tags: ProjectTag[];
 };
 
 export type OperationLog = {
@@ -217,17 +218,33 @@ export type Assignment = {
 export type StaffPermission = {
   account: string;
   note: string;
+  override: boolean;
+  visibleAccounts: string[];
+};
+
+export type ProjectTag = {
+  id: string;
+  name: string;
+  createdAt: string;
 };
 
 export type WorkRecord = {
   id: string;
   account: string;
+  assignee: string;
   title: string;
   content: string;
   workDate: string;
   done: boolean;
+  tagId: string;
   updatedAt: string;
 };
+
+export const CROSS_PERSON_COPY =
+  "跨人是指同一瀏覽器、同一本機，用不同帳戶輪流登入後才看得到。不是即時多人同時協作，也沒有即時通知。";
+
+export const HANDOFF_COPY =
+  "分交只改這筆紀錄的歸屬。同一瀏覽器輪流登入後，新歸屬者可以修改，原歸屬者不能再改。沒有即時通知。";
 
 export const RECORD_PAGE_SIZE = 10;
 
@@ -322,6 +339,19 @@ export function assignMember(
   return { ok: true, value: next };
 }
 
+export function normalizeStaffPermission(value: unknown): StaffPermission | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Partial<StaffPermission>;
+  if (typeof item.account !== "string" || typeof item.note !== "string") return null;
+  const visibleAccounts = Array.isArray(item.visibleAccounts)
+    ? [...new Set(item.visibleAccounts.filter((account): account is string => typeof account === "string" && account.trim().length > 0))]
+    : [];
+  const override = item.override === true;
+  const note = item.note.trim();
+  if (!note && !override && visibleAccounts.length === 0) return null;
+  return { account: item.account, note, override, visibleAccounts };
+}
+
 export function setStaffPermission(
   users: OfficeUser[],
   permissions: StaffPermission[],
@@ -332,9 +362,57 @@ export function setStaffPermission(
   if (!users.some((user) => user.account === normalized)) {
     return { ok: false, error: "請選擇已建立的帳戶。" };
   }
-  const trimmed = note.trim();
+  const existing = permissions.find((item) => item.account === normalized);
+  return assignStaffAccess(users, permissions, "CEO", {
+    account: normalized,
+    note,
+    override: existing?.override === true,
+    visibleAccounts: existing?.visibleAccounts ?? [],
+  });
+}
+
+export function assignRole(
+  users: OfficeUser[],
+  actorRole: Role,
+  account: string,
+  role: string,
+): NamedResult<OfficeUser[]> {
+  if (!canManageDepartments(actorRole)) return { ok: false, error: "沒有權限指派角色。" };
+  const normalized = account.trim();
+  const current = users.find((user) => user.account === normalized);
+  if (!current) return { ok: false, error: "請選擇已建立的帳戶。" };
+  if (!isRole(role)) return { ok: false, error: "角色只可為 CEO、HR、會計或員工。" };
+  if (current.role === "CEO" && role !== "CEO" && users.filter((user) => user.role === "CEO").length <= 1) {
+    return { ok: false, error: "公司至少要保留一位 CEO。" };
+  }
+  return {
+    ok: true,
+    value: users.map((user) => (user.account === normalized ? { ...user, role } : user)),
+  };
+}
+
+export function assignStaffAccess(
+  users: OfficeUser[],
+  permissions: StaffPermission[],
+  actorRole: Role,
+  input: { account: string; note: string; override: boolean; visibleAccounts: string[] },
+): NamedResult<StaffPermission[]> {
+  if (!canManageDepartments(actorRole)) return { ok: false, error: "沒有權限指派個別權限。" };
+  const normalized = input.account.trim();
+  if (!users.some((user) => user.account === normalized)) {
+    return { ok: false, error: "請選擇已建立的帳戶。" };
+  }
+  const visibleAccounts = [
+    ...new Set(input.visibleAccounts.map((account) => account.trim()).filter((account) => account && account !== normalized)),
+  ];
+  if (visibleAccounts.some((account) => !users.some((user) => user.account === account))) {
+    return { ok: false, error: "可見帳戶必須是已建立的帳戶。" };
+  }
+  const note = input.note.trim();
+  const override = input.override === true;
   const next = permissions.filter((item) => item.account !== normalized);
-  if (trimmed) next.push({ account: normalized, note: trimmed });
+  if (!note && !override && visibleAccounts.length === 0) return { ok: true, value: next };
+  next.push({ account: normalized, note, override, visibleAccounts });
   return { ok: true, value: next };
 }
 
@@ -351,13 +429,26 @@ export function rankInDepartment(
   return positions.find((item) => item.id === assignment.positionId)?.rank ?? null;
 }
 
+export function sharesDepartment(assignments: Assignment[], left: string, right: string): boolean {
+  if (!left || !right || left === right) return false;
+  const departmentIds = new Set(
+    assignments.filter((item) => item.account === left).map((item) => item.departmentId),
+  );
+  return assignments.some((item) => item.account === right && departmentIds.has(item.departmentId));
+}
+
 export function canQueryAccount(
   assignments: Assignment[],
   positions: Position[],
   viewer: string,
   owner: string,
+  permissions: StaffPermission[] = [],
 ): boolean {
   if (!viewer || viewer === owner) return false;
+  const permission = permissions.find((item) => item.account === viewer);
+  if (permission?.override) {
+    return sharesDepartment(assignments, viewer, owner) && permission.visibleAccounts.includes(owner);
+  }
   const departmentIds = new Set(
     assignments
       .filter((item) => item.account === viewer)
@@ -412,24 +503,54 @@ export function changePosition(
   };
 }
 
+export function recordAssignee(record: Pick<WorkRecord, "account" | "assignee">): string {
+  return record.assignee || record.account;
+}
+
+export function canEditWorkRecord(record: WorkRecord, actor: string): boolean {
+  return recordAssignee(record) === actor;
+}
+
+export function addProjectTag(tags: ProjectTag[], name: string, now: Date): NamedResult<ProjectTag> {
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "標籤名稱須填寫。" };
+  if (tags.some((item) => item.name === trimmed)) return { ok: false, error: "此標籤名稱已存在。" };
+  return { ok: true, value: { id: createId(now), name: trimmed, createdAt: stamp(now) } };
+}
+
+export function recordsWithTag(records: WorkRecord[], tagId: string): WorkRecord[] {
+  return records.filter((item) => item.tagId === tagId);
+}
+
 export function addWorkRecord(
   records: WorkRecord[],
   account: string,
-  input: { title: string; content: string; workDate?: string },
+  input: { title: string; content: string; workDate?: string; assignee?: string; tagId?: string },
   now: Date,
+  context: { users?: OfficeUser[]; tags?: ProjectTag[] } = {},
 ): NamedResult<WorkRecord> {
   const title = input.title.trim();
   if (!title) return { ok: false, error: "工作紀錄標題須填寫。" };
+  const assignee = (input.assignee ?? account).trim() || account;
+  if (context.users && !context.users.some((user) => user.account === assignee)) {
+    return { ok: false, error: "請選擇已建立的歸屬帳戶。" };
+  }
+  const tagId = (input.tagId ?? "").trim();
+  if (tagId && !context.tags?.some((tag) => tag.id === tagId)) {
+    return { ok: false, error: "請選擇已建立的專案標籤。" };
+  }
   const workDate = input.workDate && /^\d{4}-\d{2}-\d{2}$/.test(input.workDate) ? input.workDate : dateStamp(now);
   return {
     ok: true,
     value: {
       id: createId(now),
       account,
+      assignee,
       title,
       content: input.content.trim(),
       workDate,
       done: false,
+      tagId,
       updatedAt: stamp(now),
     },
   };
@@ -439,21 +560,27 @@ export function updateWorkRecord(
   records: WorkRecord[],
   actor: string,
   id: string,
-  input: { title: string; content: string },
+  input: { title: string; content: string; tagId?: string },
   now: Date,
+  tags?: ProjectTag[],
 ): NamedResult<WorkRecord[]> {
   const current = records.find((item) => item.id === id);
-  if (!current || current.account !== actor) {
-    return { ok: false, error: "只能修改自己的工作紀錄。" };
+  if (!current || !canEditWorkRecord(current, actor)) {
+    return { ok: false, error: "只能修改歸屬自己的工作紀錄。" };
   }
   const title = input.title.trim();
   if (!title) return { ok: false, error: "工作紀錄標題須填寫。" };
+  let tagId = current.tagId;
+  if (input.tagId !== undefined) {
+    tagId = input.tagId.trim();
+    if (tagId && !tags?.some((tag) => tag.id === tagId)) {
+      return { ok: false, error: "請選擇已建立的專案標籤。" };
+    }
+  }
   return {
     ok: true,
     value: records.map((item) =>
-      item.id === id
-        ? { ...item, title, content: input.content.trim(), updatedAt: stamp(now) }
-        : item,
+      item.id === id ? { ...item, title, content: input.content.trim(), tagId, updatedAt: stamp(now) } : item,
     ),
   };
 }
@@ -465,27 +592,65 @@ export function completeWorkRecord(
   now: Date,
 ): NamedResult<WorkRecord[]> {
   const current = records.find((item) => item.id === id);
-  if (!current || current.account !== actor) {
-    return { ok: false, error: "只能把自己的工作紀錄標為已完成。" };
+  if (!current || !canEditWorkRecord(current, actor)) {
+    return { ok: false, error: "只能把歸屬自己的工作紀錄標為已完成。" };
   }
   return {
     ok: true,
-    value: records.map((item) =>
-      item.id === id ? { ...item, done: true, updatedAt: stamp(now) } : item,
-    ),
+    value: records.map((item) => (item.id === id ? { ...item, done: true, updatedAt: stamp(now) } : item)),
+  };
+}
+
+export function reassignWorkRecord(
+  records: WorkRecord[],
+  actor: string,
+  id: string,
+  assignee: string,
+  users: OfficeUser[],
+  now: Date,
+): NamedResult<WorkRecord[]> {
+  const current = records.find((item) => item.id === id);
+  if (!current || !canEditWorkRecord(current, actor)) {
+    return { ok: false, error: "只有目前歸屬者可以分交這筆工作紀錄。" };
+  }
+  const nextAssignee = assignee.trim();
+  if (!users.some((user) => user.account === nextAssignee)) {
+    return { ok: false, error: "請選擇已建立的歸屬帳戶。" };
+  }
+  return {
+    ok: true,
+    value: records.map((item) => (item.id === id ? { ...item, assignee: nextAssignee, updatedAt: stamp(now) } : item)),
   };
 }
 
 export function recordsForAccount(records: WorkRecord[], account: string, workDate = ""): WorkRecord[] {
   return records.filter((item) => {
-    if (item.account !== account) return false;
+    if (recordAssignee(item) !== account) return false;
     if (workDate && item.workDate !== workDate) return false;
     return true;
   });
 }
 
 export function unfinishedRecords(records: WorkRecord[], account: string): WorkRecord[] {
-  return records.filter((item) => item.account === account && !item.done);
+  return records.filter((item) => recordAssignee(item) === account && !item.done);
+}
+
+export function crossPersonTodos(
+  records: WorkRecord[],
+  viewer: string,
+  assignments: Assignment[],
+  positions: Position[],
+  permissions: StaffPermission[] = [],
+): { assignedToMe: WorkRecord[]; visibleToMe: WorkRecord[] } {
+  const open = records.filter((item) => !item.done);
+  return {
+    assignedToMe: open.filter((item) => recordAssignee(item) === viewer && item.account !== viewer),
+    visibleToMe: open.filter((item) => {
+      const owner = recordAssignee(item);
+      if (owner === viewer) return false;
+      return canQueryAccount(assignments, positions, viewer, owner, permissions);
+    }),
+  };
 }
 
 export function normalizeWorkRecord(value: unknown): WorkRecord | null {
@@ -504,13 +669,16 @@ export function normalizeWorkRecord(value: unknown): WorkRecord | null {
     typeof item.workDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.workDate)
       ? item.workDate
       : item.updatedAt.slice(0, 10);
+  const assignee = typeof item.assignee === "string" && item.assignee.trim() ? item.assignee : item.account;
   return {
     id: item.id,
     account: item.account,
+    assignee,
     title: item.title,
     content: item.content,
     workDate,
     done: item.done === true,
+    tagId: typeof item.tagId === "string" ? item.tagId : "",
     updatedAt: item.updatedAt,
   };
 }
@@ -544,6 +712,7 @@ export function emptyBundle(): CompanyBundle {
     assignments: [],
     permissions: [],
     records: [],
+    tags: [],
   };
 }
 
@@ -551,7 +720,7 @@ export function isConsolePath(path: string): boolean {
   return path === "/console" || path.startsWith("/console/");
 }
 
-const ROOT_PATHS = new Set(["/", "/overview", "/calendar", "/records", "/pending", "/account", "/users", "/departments"]);
+const ROOT_PATHS = new Set(["/", "/overview", "/calendar", "/records", "/pending", "/account", "/users", "/departments", "/permissions"]);
 
 export function companyBaseFromPath(path: string): string {
   if (isConsolePath(path) || path === "/" || ROOT_PATHS.has(path)) return "";

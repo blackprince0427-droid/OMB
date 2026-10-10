@@ -1,10 +1,11 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Building2, CalendarDays, KeyRound, LayoutGrid, ListChecks, NotebookPen, Users } from "lucide-react";
+import { Building2, CalendarDays, KeyRound, LayoutGrid, ListChecks, NotebookPen, ShieldCheck, Users } from "lucide-react";
 import { AccountView } from "@/components/account-view";
 import { CalendarView } from "@/components/calendar-view";
 import { DepartmentsView } from "@/components/departments-view";
+import { PermissionsView } from "@/components/permissions-view";
 import { FrameLink, FrameNavProvider, type FrameScreen } from "@/components/frame-nav";
 import { OverviewView } from "@/components/overview-view";
 import { PendingView } from "@/components/pending-view";
@@ -31,6 +32,7 @@ const links: {
   { href: "/account", screen: "account", group: "帳戶", label: "帳戶", icon: KeyRound, testId: "nav-account" },
   { href: "/users", screen: "users", group: "管理", label: "使用者", icon: Users, testId: "nav-users", ceoOnly: true },
   { href: "/departments", screen: "departments", group: "管理", label: "部門", icon: Building2, testId: "nav-departments", orgOnly: true },
+  { href: "/permissions", screen: "permissions", group: "管理", label: "權限指派", icon: ShieldCheck, testId: "nav-permissions", orgOnly: true },
 ];
 
 const screens: Record<FrameScreen, typeof OverviewView> = {
@@ -41,6 +43,7 @@ const screens: Record<FrameScreen, typeof OverviewView> = {
   account: AccountView,
   users: UsersView,
   departments: DepartmentsView,
+  permissions: PermissionsView,
 };
 
 export function AppShell() {
@@ -79,7 +82,7 @@ function ShellFrame({
           </div>
           <div>
             <p className="text-[15px] font-bold">小型辦公</p>
-            <p className="text-xs text-[#8b919d]">網頁版 · 第五版</p>
+            <p className="text-xs text-[#8b919d]">網頁版 · 第六版</p>
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto md:block" aria-label="主框架導覽">

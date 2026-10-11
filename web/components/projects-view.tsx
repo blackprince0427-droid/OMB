@@ -12,7 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DenseTaskTable, KanbanTaskBoard, ProjectSummaryBar, TaskTreeToolbar } from "@/components/task-tree-display";
 import { CROSS_PERSON_COPY } from "@/lib/office";
+import {
+  readTaskTreeViewMode,
+  writeTaskTreeViewMode,
+  type KanbanLaneMode,
+  type TaskTreeViewMode,
+} from "@/lib/task-tree-view";
 import {
   LEVEL_LABEL,
   TASK_STATUSES,
@@ -24,6 +31,11 @@ import {
   type VisibilityMode,
 } from "@/lib/tasks";
 import { useOffice } from "@/components/office-provider";
+
+function initialTaskTreeViewMode(): TaskTreeViewMode {
+  if (typeof window === "undefined") return "dense";
+  return readTaskTreeViewMode(window.localStorage);
+}
 
 function Notice({ error, ok }: { error: string; ok: string }) {
   if (error) {
@@ -52,7 +64,6 @@ export function ProjectsView() {
   const office = useOffice();
   const { session, users, tasks, invites, companyBase } = office;
   const [nodeId, setNodeId] = useState("");
-  const [open, setOpen] = useState<Record<string, boolean>>({});
   const [name, setName] = useState("");
   const [childName, setChildName] = useState("");
   const [noteTitle, setNoteTitle] = useState("");
@@ -60,6 +71,10 @@ export function ProjectsView() {
   const [target, setTarget] = useState("");
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
+  const [viewMode, setViewMode] = useState<TaskTreeViewMode>(initialTaskTreeViewMode);
+  const [laneMode, setLaneMode] = useState<KanbanLaneMode>("l1");
+  const [denseOpen, setDenseOpen] = useState<Record<string, boolean>>({});
+  const [kanbanOpen, setKanbanOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const read = () => setNodeId(new URLSearchParams(window.location.search).get("node") ?? "");
@@ -137,8 +152,34 @@ export function ProjectsView() {
     );
   }
 
+  function chooseViewMode(next: TaskTreeViewMode) {
+    setViewMode(next);
+    try {
+      writeTaskTreeViewMode(window.localStorage, next);
+    } catch {
+      // 瀏覽器拒絕寫入時，這次仍可切換，下次進來回到預設密集表。
+    }
+  }
+
+  function expandVisible() {
+    const next: Record<string, boolean> = {};
+    for (const node of visible) {
+      const hasChild = childNodes(visible, node.id).length > 0;
+      if (!hasChild) continue;
+      if (viewMode === "dense" && node.level >= 1 && node.level < 3) next[node.id] = true;
+      if (viewMode === "kanban" && node.level === 2) next[node.id] = true;
+    }
+    if (viewMode === "dense") setDenseOpen(next);
+    else setKanbanOpen(next);
+  }
+
+  function collapseVisible() {
+    if (viewMode === "dense") setDenseOpen({});
+    else setKanbanOpen({});
+  }
+
   return (
-    <div className="mx-auto max-w-[980px]">
+    <div className="w-full">
       <div className="mb-4 flex items-center gap-2.5">
         <span className="grid size-[34px] place-items-center rounded-[10px] bg-[#e7f6ee] text-[#178a4a]">
           <FolderTree className="size-4" />
@@ -170,68 +211,52 @@ export function ProjectsView() {
           <Button type="submit">建立專案</Button>
         </form>
       </section>
-      <section className="rounded-2xl border border-[#e6e8ee] bg-white p-4" data-testid="project-tree">
+      <section data-testid="project-tree">
         {projects.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">目前沒有你可見的專案。</p>
+          <p className="rounded-2xl border border-[#e6e8ee] bg-white p-4 text-[13px] text-muted-foreground">目前沒有你可見的專案。</p>
         ) : (
-          projects.map((project) => (
-            <article key={project.id} className="border-b border-[#f0f1f4] py-3 last:border-b-0">
-              <NodeLine node={project} names={names} onOpen={openNode} />
-              {childNodes(visible, project.id).map((task) => (
-                <div key={task.id} className="mt-2 ml-4 border-l border-[#e6e8ee] pl-3">
-                  <NodeLine node={task} names={names} onOpen={openNode} />
-                  {open[task.id] ? (
-                    childNodes(visible, task.id).map((sub) => (
-                      <div key={sub.id} className="mt-2 ml-4">
-                        <NodeLine node={sub} names={names} onOpen={openNode} />
-                        {open[sub.id]
-                          ? childNodes(visible, sub.id).map((item) => (
-                              <div key={item.id} className="mt-2 ml-4">
-                                <NodeLine node={item} names={names} onOpen={openNode} />
-                              </div>
-                            ))
-                          : null}
-                        {childNodes(visible, sub.id).length > 0 ? (
-                          <button type="button" className="mt-1 text-xs text-[#2f6fed]" onClick={() => setOpen((current) => ({ ...current, [sub.id]: !current[sub.id] }))}>
-                            {open[sub.id] ? "收起工作項" : "展開工作項"}
-                          </button>
-                        ) : null}
-                      </div>
-                    ))
-                  ) : null}
-                  {childNodes(visible, task.id).length > 0 ? (
-                    <button type="button" className="mt-1 text-xs text-[#2f6fed]" onClick={() => setOpen((current) => ({ ...current, [task.id]: !current[task.id] }))}>
-                      {open[task.id] ? "收起子任務" : "展開子任務"}
-                    </button>
-                  ) : null}
-                </div>
+          <>
+            <TaskTreeToolbar
+              mode={viewMode}
+              laneMode={laneMode}
+              onMode={chooseViewMode}
+              onLaneMode={setLaneMode}
+              onExpandAll={expandVisible}
+              onCollapse={collapseVisible}
+            />
+            <div id="task-tree-panel" role="tabpanel" aria-labelledby={viewMode === "dense" ? "task-tree-tab-dense" : "task-tree-tab-kanban"} data-mode={viewMode}>
+              {projects.map((project) => (
+                <article key={project.id} className="mb-4 space-y-2" data-testid={`project-block-${project.id}`}>
+                  <ProjectSummaryBar project={project} names={names} onOpen={openNode} />
+                  {viewMode === "dense" ? (
+                    <DenseTaskTable
+                      project={project}
+                      nodes={visible}
+                      expanded={denseOpen}
+                      names={names}
+                      onOpen={openNode}
+                      onToggle={(id) => setDenseOpen((current) => ({ ...current, [id]: !current[id] }))}
+                    />
+                  ) : (
+                    <KanbanTaskBoard
+                      project={project}
+                      nodes={visible}
+                      laneMode={laneMode}
+                      expanded={kanbanOpen}
+                      names={names}
+                      onOpen={openNode}
+                      onToggle={(id) => setKanbanOpen((current) => ({ ...current, [id]: !current[id] }))}
+                    />
+                  )}
+                </article>
               ))}
-            </article>
-          ))
+            </div>
+          </>
         )}
       </section>
       {invites.some((item) => item.from === session.account && item.status === "rejected") ? (
         <p className="mt-3 text-[13px] text-[#9f1d1d]">有邀請被拒絕。可在節點頁再邀請同一人或換人。</p>
       ) : null}
-    </div>
-  );
-}
-
-function NodeLine({ node, names, onOpen }: { node: TaskNode; names: Map<string, string>; onOpen: (id: string) => void }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div>
-        <p className="text-sm font-semibold">
-          {node.name}
-          <span className="ml-2 text-xs font-normal text-[#8b919d]">{LEVEL_LABEL[node.level]}</span>
-        </p>
-        <p className="text-xs text-[#667085]">
-          {node.status} · {summary(node, names)}
-        </p>
-      </div>
-      <Button type="button" variant="outline" size="sm" data-testid={`open-node-${node.id}`} onClick={() => onOpen(node.id)}>
-        打開
-      </Button>
     </div>
   );
 }

@@ -28,13 +28,15 @@ npm run open
 
 ## 固定網址（Vercel）
 
-線上交付是固定網址的網頁。推送到 GitHub 的 `main` 之後，Vercel 會自動重新建置並更新那個網址。登入狀態仍在該分頁的 `sessionStorage`。部署環境 omb-s4y8 接上 Vercel Blob 後，公司檔存在 Blob，重開或新建實例後仍在；見上方「跨裝置」。權杖由該環境既有的 Blob 設定提供，不寫進程式。
+線上交付是固定網址的網頁：[https://omb-s4y8.vercel.app](https://omb-s4y8.vercel.app)（Vercel 專案 `omb-s4y8`）。推送到 GitHub 的 `main` 之後，Vercel 會自動重新建置並更新這個網址。登入狀態仍在該分頁的 `sessionStorage`。部署環境已接上 Vercel Blob，公司檔存在 Blob，重開或新建實例後仍在；見上方「跨裝置」。`BLOB_READ_WRITE_TOKEN` 已設在 production、preview、development，不寫進程式。
 
-倉庫裡還沒有接上 Vercel。要上線必須先由心夜同意合併部署設定，再到 Vercel 做一次連接。連接完成後，之後每次推上 `main` 就會自動更新，不需要再改專案設定。
+倉庫已接上 Vercel 專案 `omb-s4y8`。Production 跟著 `main` 自動部署。之後的合併與部署仍要心夜同意。
 
 這次開發機上的 Cloudflare 臨時網址只在該次會話有效，不是固定網址。
 
-### 心夜要做的一次設定
+### 已完成的一次連接
+
+下面是當時的連接步驟，已經做完，留作對照。
 
 1. 用要綁定的 GitHub 帳號登入 [Vercel](https://vercel.com)，選 **Add New… → Project**，匯入 `blackprince0427-droid/OMB`。
 2. **Root Directory** 設為 `web`。應用放在這個英文目錄，是因為路徑裡的「網頁版」會讓 Turbopack 在建置時當掉。倉庫根目錄沒有 `package.json`，不設 Root Directory 就不會辨認成 Next.js。

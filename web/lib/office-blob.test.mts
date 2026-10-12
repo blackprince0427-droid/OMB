@@ -2,10 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { emptyBundle, seedUsers, type CompanyBundle } from "./office.ts";
 import {
+  blobReadUrl,
   blobTokenConfigured,
   companyBundlePath,
   createMemoryBlobStore,
+  createVercelBlobStore,
+  describeBlobReadFailure,
   OFFICE_REGISTRY_PATH,
+  officeErrorBody,
+  OfficePersistenceError,
+  parseBlobStoreId,
 } from "./office-blob.ts";
 import { createBlobOfficeServer } from "./server-office.ts";
 
@@ -113,4 +119,56 @@ test("Blob 上版本不符仍回 409，強制覆寫才取代整包", async () =>
   const view = await third.transaction(() => third.readBundle("default"));
   assert.equal(view?.bundle.records[0]?.title, "丙");
   assert.equal(stale.ok, true);
+});
+
+test("store_ 前綴的權杖不會把讀取網址截成 store", async () => {
+  assert.equal(parseBlobStoreId("vercel_blob_rw_store_exampleId_secret"), "exampleId");
+  assert.equal(parseBlobStoreId("vercel_blob_rw_ce0rcu23vrrdzqap_secret"), "ce0rcu23vrrdzqap");
+  const seen: { url?: string; wrote?: { pathname: string; access: string } } = {};
+  const store = createVercelBlobStore({
+    env: { BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_store_exampleId_secret" },
+    readText: async (url) => {
+      seen.url = url;
+      return null;
+    },
+    writeText: async (pathname, _body, _token, access) => {
+      seen.wrote = { pathname, access };
+    },
+  });
+  assert.equal(await store.read("office/registry.json"), null);
+  assert.equal(seen.url, blobReadUrl("exampleId", "private", "office/registry.json"));
+  await store.write("office/registry.json", "{}");
+  assert.deepEqual(seen.wrote, { pathname: "office/registry.json", access: "private" });
+});
+
+test("BLOB_STORE_ID 與 BLOB_ACCESS 覆寫讀取位置", async () => {
+  let seen = "";
+  const store = createVercelBlobStore({
+    env: {
+      BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_wrongId_secret",
+      BLOB_STORE_ID: "store_overrideId",
+      BLOB_ACCESS: "public",
+    },
+    readText: async (url) => {
+      seen = url;
+      return "{\"companies\":[]}";
+    },
+  });
+  assert.equal(await store.read(OFFICE_REGISTRY_PATH), "{\"companies\":[]}");
+  assert.equal(seen, "https://overrideId.public.blob.vercel-storage.com/office/registry.json");
+});
+
+test("Blob 失敗回 JSON 說明，不帶權杖、不空訊息", () => {
+  const blocked = officeErrorBody(new OfficePersistenceError(describeBlobReadFailure(403, "Your store is blocked"), 503));
+  assert.equal(blocked.status, 503);
+  assert.match(blocked.error, /停用或超出用量/);
+  assert.equal(blocked.error.includes("vercel_blob"), false);
+  const leaked = officeErrorBody(new Error("failed vercel_blob_rw_store_exampleId_secret"));
+  assert.equal(leaked.error.includes("vercel_blob_rw_store_exampleId_secret"), false);
+  assert.equal(leaked.error.includes("[token]"), true);
+  assert.ok(blocked.error.length > 0);
+  assert.ok(leaked.error.length > 0);
+  const opaque = officeErrorBody(new Error(""));
+  assert.equal(opaque.status, 500);
+  assert.equal(opaque.error, "公司資料暫時無法讀寫。");
 });

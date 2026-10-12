@@ -24,7 +24,7 @@ npm run open
 - 其他人寫入後，這台若沒有尚未上傳的變更，大約每 3 秒會自行換成伺服器上的新內容，不用重新整理。
 - 若你這台有尚未上傳的變更，而伺服器已經先被別人寫過，畫面會先問。選覆蓋遠端才用你這台的整份資料取代伺服器；選保留遠端則改以伺服器的內容更新這台。
 - 這不是兩邊同時改同一份再合併，也沒有即時通知。登入憑證仍只在這個分頁。
-- 有 Vercel Blob 設定時，公司清單與每家公司各一份 JSON 存在 Blob。新的伺服器實例啟動後仍讀得到已寫入的公司與內容。沒有這項設定時，本機改寫 `data/office.json`（已忽略，不進版控），介面不會因此變成錯誤頁。這次沒有加匯出、匯入或備份工具，也沒有改用資料庫。
+- 有 Vercel Blob 設定時，公司清單與每家公司各一份 JSON 存在 Blob。新的伺服器實例啟動後仍讀得到已寫入的公司與內容。沒有這項設定時，本機改寫 `data/office.json`（已忽略，不進版控），介面不會因此變成錯誤頁。Blob 讀寫失敗時，`/api/office/*` 回 JSON `{ "error": "…" }`，不會是空的 500。這次沒有加匯出、匯入或備份工具，也沒有改用資料庫。
 
 ## 固定網址（Vercel）
 
@@ -39,7 +39,7 @@ npm run open
 1. 用要綁定的 GitHub 帳號登入 [Vercel](https://vercel.com)，選 **Add New… → Project**，匯入 `blackprince0427-droid/OMB`。
 2. **Root Directory** 設為 `web`。應用放在這個英文目錄，是因為路徑裡的「網頁版」會讓 Turbopack 在建置時當掉。倉庫根目錄沒有 `package.json`，不設 Root Directory 就不會辨認成 Next.js。
 3. Framework Preset 維持 **Next.js**。Build Command 用 `npm run build`，Install Command 用 `npm install`。這兩項已寫在 `web/vercel.json`。不要改 Output Directory。
-4. Node.js 用 20.9 或更新（`package.json` 的 `engines`）。公司檔持久化用專案已連接的 Vercel Blob；程式只讀環境裡的 `BLOB_READ_WRITE_TOKEN`，不把權杖寫進倉庫。沒有這項設定時，本機仍用 `data/office.json`。
+4. Node.js 用 20.9 或更新（`package.json` 的 `engines`）。公司檔持久化用專案已連接的 Vercel Blob。必填環境變數是 `BLOB_READ_WRITE_TOKEN`（Vercel 連接 Blob store 後自動寫入，形狀 `vercel_blob_rw_…`，Production／Preview／Development 都要有，且執行期讀得到，不在建置時寫死）。可選 `BLOB_STORE_ID`（`store_<id>` 或裸 id，用來覆寫讀取網址）。可選 `BLOB_ACCESS`（`private` 或 `public`，未設定為 `private`）。權杖不要寫進倉庫。沒有 `BLOB_READ_WRITE_TOKEN` 時，本機仍用 `data/office.json`，不因此回 500。store 被停用或超出用量時，API 會回 JSON 說明，不會是空 body。
 5. Production Branch 選 `main`。確認 Git 自動部署是開的（Vercel 匯入 GitHub 倉庫後的預設）。
 6. 按 Deploy。第一次部署的是當時 `main` 上的程式。之後只要有人把變更合併進 `main`，同一個網址會自動換成新版本。
 

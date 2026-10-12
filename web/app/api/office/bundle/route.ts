@@ -1,8 +1,9 @@
-import { getOfficeServer } from "@/lib/server-office";
+import { officeTransaction } from "@/lib/office-route";
 
 export async function GET(request: Request) {
   const companyId = new URL(request.url).searchParams.get("companyId") ?? "";
-  const bundle = await getOfficeServer().transaction(() => getOfficeServer().readBundle(companyId));
+  const bundle = await officeTransaction((office) => office.readBundle(companyId));
+  if (bundle instanceof Response) return bundle;
   if (!bundle) return Response.json({ error: "找不到此公司。" }, { status: 404 });
   return Response.json(bundle);
 }
@@ -14,7 +15,8 @@ export async function PUT(request: Request) {
   } catch {
     return Response.json({ error: "公司資料不正確。" }, { status: 400 });
   }
-  const result = await getOfficeServer().transaction(() => getOfficeServer().writeBundle(body && typeof body === "object" ? body : {}));
+  const result = await officeTransaction((office) => office.writeBundle(body && typeof body === "object" ? body : {}));
+  if (result instanceof Response) return result;
   if (!result.ok && result.conflict) {
     return Response.json(
       { conflict: true, revision: result.revision, bundle: result.bundle, logs: result.logs },

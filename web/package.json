@@ -11,10 +11,11 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 43123",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test lib/office.test.mts lib/tasks.test.mts lib/task-tree-view.test.mts lib/bundle-sync.test.mts lib/server-office.test.mts lib/office-load.test.mts"
+    "test": "node --experimental-strip-types --test lib/office.test.mts lib/tasks.test.mts lib/task-tree-view.test.mts lib/bundle-sync.test.mts lib/server-office.test.mts lib/office-blob.test.mts lib/office-load.test.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
+    "@vercel/blob": "^2.3.3",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "lucide-react": "^1.53.0",

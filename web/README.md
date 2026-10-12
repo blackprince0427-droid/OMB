@@ -1,12 +1,12 @@
 # 小型辦公軟件
 
-網頁版，對應 OMB 開發文檔 DEV-V1、UI 規格 UI-DEV-V1、第二版內容 DEV-V2-CONTENT（依據計劃書 V1.14）、第三版內容 DEV-V3-CONTENT（依據計劃書 V1.16），第四版內容 DEV-V4-CONTENT（依據計劃書 V1.20），第五版修復 DEV-V5-FIX（依據計劃書 V1.22），第六版內容 DEV-V6-CONTENT（依據計劃書 V1.24，F-24～F-27），第七版內容 DEV-V7-CONTENT（依據計劃書 V1.25，F-29～F-30），以及計劃書 V1.26 的 F-31（最小跨裝置）。桌面版先不做。
+網頁版，對應 OMB 開發文檔 DEV-V1、UI 規格 UI-DEV-V1、第二版內容 DEV-V2-CONTENT（依據計劃書 V1.14）、第三版內容 DEV-V3-CONTENT（依據計劃書 V1.16），第四版內容 DEV-V4-CONTENT（依據計劃書 V1.20），第五版修復 DEV-V5-FIX（依據計劃書 V1.22），第六版內容 DEV-V6-CONTENT（依據計劃書 V1.24，F-24～F-27），第七版內容 DEV-V7-CONTENT（依據計劃書 V1.25，F-29～F-30），計劃書 V1.26 的 F-31（最小跨裝置），以及計劃書 V1.27 的 F-32（Vercel Blob 持久化）。桌面版先不做。
 
 ## 開啟
 
 用瀏覽器打開 [http://localhost:43123](http://localhost:43123)。預設帳戶與密碼都是 `CEO`。
 
-網頁若尚未啟動，在 `web/` 執行：
+網頁若尚未啟動，在專案目錄執行：
 
 ```bash
 npm install
@@ -24,11 +24,11 @@ npm run open
 - 其他人寫入後，這台若沒有尚未上傳的變更，大約每 3 秒會自行換成伺服器上的新內容，不用重新整理。
 - 若你這台有尚未上傳的變更，而伺服器已經先被別人寫過，畫面會先問。選覆蓋遠端才用你這台的整份資料取代伺服器；選保留遠端則改以伺服器的內容更新這台。
 - 這不是兩邊同時改同一份再合併，也沒有即時通知。登入憑證仍只在這個分頁。
-- 伺服器把公司檔寫在 `data/office.json`（已忽略，不進版控）。這是給同一個 Node 行程用的。Vercel 的無狀態環境不會保留這個檔案，固定網址若要跨裝置，還要另接可持久的儲存；這次沒有加匯出、匯入或備份工具。
+- 有 Vercel Blob 設定時，公司清單與每家公司各一份 JSON 存在 Blob。新的伺服器實例啟動後仍讀得到已寫入的公司與內容。沒有這項設定時，本機改寫 `data/office.json`（已忽略，不進版控），介面不會因此變成錯誤頁。這次沒有加匯出、匯入或備份工具，也沒有改用資料庫。
 
 ## 固定網址（Vercel）
 
-線上交付是固定網址的網頁。推送到 GitHub 的 `main` 之後，Vercel 會自動重新建置並更新那個網址。登入狀態仍在該分頁的 `sessionStorage`。公司檔要有一個一直開著的 Node 行程才會跨瀏覽器保留；見上方「跨裝置」。
+線上交付是固定網址的網頁。推送到 GitHub 的 `main` 之後，Vercel 會自動重新建置並更新那個網址。登入狀態仍在該分頁的 `sessionStorage`。部署環境 omb-s4y8 接上 Vercel Blob 後，公司檔存在 Blob，重開或新建實例後仍在；見上方「跨裝置」。權杖由該環境既有的 Blob 設定提供，不寫進程式。
 
 倉庫裡還沒有接上 Vercel。要上線必須先由心夜同意合併部署設定，再到 Vercel 做一次連接。連接完成後，之後每次推上 `main` 就會自動更新，不需要再改專案設定。
 
@@ -39,7 +39,7 @@ npm run open
 1. 用要綁定的 GitHub 帳號登入 [Vercel](https://vercel.com)，選 **Add New… → Project**，匯入 `blackprince0427-droid/OMB`。
 2. **Root Directory** 設為 `web`。應用放在這個英文目錄，是因為路徑裡的「網頁版」會讓 Turbopack 在建置時當掉。倉庫根目錄沒有 `package.json`，不設 Root Directory 就不會辨認成 Next.js。
 3. Framework Preset 維持 **Next.js**。Build Command 用 `npm run build`，Install Command 用 `npm install`。這兩項已寫在 `web/vercel.json`。不要改 Output Directory。
-4. **不需要環境變數。** Node.js 用 20.9 或更新（`package.json` 的 `engines`）。
+4. Node.js 用 20.9 或更新（`package.json` 的 `engines`）。公司檔持久化用專案已連接的 Vercel Blob；程式只讀環境裡的 `BLOB_READ_WRITE_TOKEN`，不把權杖寫進倉庫。沒有這項設定時，本機仍用 `data/office.json`。
 5. Production Branch 選 `main`。確認 Git 自動部署是開的（Vercel 匯入 GitHub 倉庫後的預設）。
 6. 按 Deploy。第一次部署的是當時 `main` 上的程式。之後只要有人把變更合併進 `main`，同一個網址會自動換成新版本。
 

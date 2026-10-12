@@ -12,6 +12,13 @@ import {
   type CompanyBundle,
   type OperationLog,
 } from "./office.ts";
+import {
+  blobTokenConfigured,
+  createVercelBlobStore,
+  readOfficeSnapshot,
+  writeOfficeSnapshot,
+  type BlobTextStore,
+} from "./office-blob.ts";
 import { normalizeCompanies, normalizeCompanyBundle, normalizeLogs } from "./storage.ts";
 
 type BundleSlot = {
@@ -81,19 +88,57 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
+function isUnwritable(error: unknown): boolean {
+  const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+  return code === "EROFS" || code === "EACCES" || code === "EPERM" || code === "ENOTSUP";
+}
+
 export class OfficeServer {
   private chain: Promise<void> = Promise.resolve();
   private state: FileState;
-  private file: string;
+  private file: string | null;
+  private remote: BlobTextStore | null;
+  private dirty = false;
+  private inTransaction = false;
 
-  constructor(file: string) {
+  constructor(file: string | null, remote: BlobTextStore | null = null) {
     this.file = file;
-    fs.mkdirSync(path.dirname(file), { recursive: true });
+    this.remote = remote;
+    if (remote) {
+      this.state = seedState();
+      return;
+    }
+    if (!file) throw new Error("缺少公司檔位置。");
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+    } catch (error) {
+      if (!isUnwritable(error)) throw error;
+      this.file = null;
+      this.state = seedState();
+      return;
+    }
     this.state = this.readFile();
   }
 
   transaction<T>(fn: () => T): Promise<T> {
-    const run = this.chain.then(() => fn());
+    const run = this.chain.then(async () => {
+      if (this.remote) {
+        const loaded = await readOfficeSnapshot(this.remote);
+        this.state = loaded ? normalizeState(loaded) : seedState();
+        this.dirty = !loaded;
+      }
+      this.inTransaction = true;
+      try {
+        const result = fn();
+        if (this.remote && this.dirty) {
+          await writeOfficeSnapshot(this.remote, this.state);
+          this.dirty = false;
+        }
+        return result;
+      } finally {
+        this.inTransaction = false;
+      }
+    });
     this.chain = run.then(
       () => undefined,
       () => undefined,
@@ -209,7 +254,7 @@ export class OfficeServer {
   }
 
   private readFile(): FileState {
-    if (!fs.existsSync(this.file)) {
+    if (!this.file || !fs.existsSync(this.file)) {
       const seeded = seedState();
       this.state = seeded;
       this.persist();
@@ -220,9 +265,25 @@ export class OfficeServer {
   }
 
   private persist(): void {
+    if (this.remote) {
+      if (!this.inTransaction) throw new Error("公司檔必須在讀寫流程內儲存。");
+      this.dirty = true;
+      return;
+    }
+    this.writeFile();
+  }
+
+  private writeFile(): void {
+    if (!this.file) return;
     const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.state));
-    fs.renameSync(tmp, this.file);
+    try {
+      fs.mkdirSync(path.dirname(this.file), { recursive: true });
+      fs.writeFileSync(tmp, JSON.stringify(this.state));
+      fs.renameSync(tmp, this.file);
+    } catch (error) {
+      if (isUnwritable(error)) return;
+      throw error;
+    }
   }
 }
 
@@ -232,10 +293,15 @@ export function createOfficeServer(dir: string): OfficeServer {
   return new OfficeServer(path.join(dir, "office.json"));
 }
 
+export function createBlobOfficeServer(store: BlobTextStore): OfficeServer {
+  return new OfficeServer(null, store);
+}
+
 export function getOfficeServer(): OfficeServer {
   if (!singleton) {
-    const dir = process.env.OFFICE_DATA_DIR || path.join(process.cwd(), "data");
-    singleton = createOfficeServer(dir);
+    singleton = blobTokenConfigured()
+      ? createBlobOfficeServer(createVercelBlobStore())
+      : createOfficeServer(process.env.OFFICE_DATA_DIR || path.join(process.cwd(), "data"));
   }
   return singleton;
 }

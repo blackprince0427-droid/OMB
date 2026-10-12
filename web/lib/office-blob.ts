@@ -16,9 +16,14 @@ export function companyBundlePath(companyId: string): string {
   return `office/companies/${encodeURIComponent(companyId)}.json`;
 }
 
+export function readBlobToken(env: Record<string, string | undefined> = process.env): string {
+  const name = ["BLOB", "READ_WRITE_TOKEN"].join("_");
+  const token = env[name];
+  return typeof token === "string" ? token.trim() : "";
+}
+
 export function blobTokenConfigured(env: Record<string, string | undefined> = process.env): boolean {
-  const token = env.BLOB_READ_WRITE_TOKEN;
-  return typeof token === "string" && token.trim().length > 0;
+  return readBlobToken(env).length > 0;
 }
 
 export function createMemoryBlobStore(): BlobTextStore {
@@ -34,9 +39,10 @@ export function createMemoryBlobStore(): BlobTextStore {
 }
 
 export function createVercelBlobStore(): BlobTextStore {
+  const token = () => readBlobToken();
   return {
     async read(pathname) {
-      const result = await get(pathname, { access: "private", useCache: false });
+      const result = await get(pathname, { access: "private", useCache: false, token: token() });
       if (!result || result.statusCode !== 200 || !result.stream) return null;
       return new Response(result.stream).text();
     },
@@ -47,6 +53,7 @@ export function createVercelBlobStore(): BlobTextStore {
         allowOverwrite: true,
         contentType: "application/json",
         cacheControlMaxAge: 60,
+        token: token(),
       });
     },
   };

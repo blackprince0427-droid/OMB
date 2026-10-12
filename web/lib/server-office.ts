@@ -13,8 +13,8 @@ import {
   type OperationLog,
 } from "./office.ts";
 import {
-  blobTokenConfigured,
   createVercelBlobStore,
+  readBlobToken,
   readOfficeSnapshot,
   writeOfficeSnapshot,
   type BlobTextStore,
@@ -299,7 +299,7 @@ export function createBlobOfficeServer(store: BlobTextStore): OfficeServer {
 
 export function getOfficeServer(): OfficeServer {
   if (!singleton) {
-    singleton = blobTokenConfigured()
+    singleton = readBlobToken().length > 0
       ? createBlobOfficeServer(createVercelBlobStore())
       : createOfficeServer(process.env.OFFICE_DATA_DIR || path.join(process.cwd(), "data"));
   }

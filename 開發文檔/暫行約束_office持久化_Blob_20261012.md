@@ -4,7 +4,7 @@
 - 日期：2026-10-12
 - 依據：產品經理口徑＋計劃書 V1.27（`計劃書版本/小型辦公軟件_計劃書_V1.27_20261012.md`）承諾 **F-32**
 - 狀態：已落地於 `web/`（對應 F-32；本文件是約束，不重寫 F-24～F-31）
-- 說明：本文件是約束與修復範圍紀錄，**不取代** F-32。不重寫 F-24～F-31。有 `BLOB_READ_WRITE_TOKEN` 時，公司清單與每家公司一份 JSON 存在 Vercel Blob，新的伺服器實例仍讀得到。沒有這項設定時本機用 `data/office.json`，不因此回 500。
+- 說明：本文件是約束與修復範圍紀錄，**不取代** F-32。不重寫 F-24～F-31。有 `BLOB_READ_WRITE_TOKEN`（形狀 `vercel_blob_rw_…`）時，公司清單與每家公司一份 JSON 存在 Vercel Blob，新的伺服器實例仍讀得到。讀取網址用 store 的裸 id：權杖或 `BLOB_STORE_ID` 若是 `store_<id>`，不能把主機截成 `store`。可選 `BLOB_ACCESS` 為 `private`（預設）或 `public`。沒有權杖時本機用 `data/office.json`，不因此回 500。Blob 失敗時 API 回 JSON `{ "error": "…" }`，不得是空 body。
 
 ## 與既有文件的關係
 

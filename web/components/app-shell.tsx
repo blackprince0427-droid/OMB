@@ -89,7 +89,7 @@ function ShellFrame({
             <p className="text-[15px] font-bold">小型辦公</p>
             <p className="text-xs text-[#8b919d]">網頁版 · 第七版</p>
             <p data-testid="sync-note" className="mt-1 max-w-[180px] text-[11px] leading-relaxed text-[#8b919d]">
-              公司資料存在伺服器。其他人先寫入時，覆蓋前會先詢問。
+              其他人寫入後，這台若沒有尚未上傳的變更，會自行換成新內容。若你這台也改過，覆蓋前仍會先詢問。
             </p>
           </div>
         </div>

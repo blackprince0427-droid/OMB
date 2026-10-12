@@ -135,7 +135,7 @@ export function LoginScreen() {
           </Button>
         </form>
         <p data-testid="sync-login-note" className="mt-3.5 text-xs leading-relaxed text-[#8b919d]">
-          同一公司在其他瀏覽器登入後，會讀到已寫入伺服器的資料。覆蓋伺服器前會先詢問。
+          其他人寫入後，這台若沒有尚未上傳的變更，會自行換成新內容。若你這台也改過，覆蓋前仍會先詢問。
         </p>
         <p className="mt-1.5 text-xs leading-relaxed text-[#8b919d]">
           {isDefault

@@ -70,6 +70,7 @@ import {
 import { OverwritePrompt } from "@/components/overwrite-prompt";
 import { legacyEligible, loadOfficeCache, markMigrated, saveOfficeCache } from "@/lib/office-cache";
 import { createCompanyRemote, disableCompanyRemote, fetchBundle, putBundle } from "@/lib/office-api";
+import { planRemoteRefresh } from "@/lib/bundle-sync";
 import { loadOfficeScreen, type LoadConflict } from "@/lib/office-load";
 import {
   COMPANIES_KEY,
@@ -314,6 +315,70 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [companies, developer]);
+
+  useEffect(() => {
+    if (!ready || !company || companyState !== "ready") return;
+    let cancelled = false;
+    const refresh = async () => {
+      if (cancelled || flushing.current || conflictRef.current) return;
+      const id = companyIdRef.current;
+      if (!id) return;
+      const remote = await fetchBundle(id);
+      if (cancelled || flushing.current || conflictRef.current || !remote.ok || !remote.found) return;
+      if (companyIdRef.current !== id) return;
+      const plan = planRemoteRefresh({
+        dirty: dirtyRef.current,
+        baseRevision: revisionRef.current,
+        remoteRevision: remote.revision,
+      });
+      if (plan === "noop") return;
+      if (plan === "prompt") {
+        conflictRef.current = true;
+        setConflictError("");
+        setConflict({
+          companyId: id,
+          localBundle: bundleRef.current,
+          localLogs: logsRef.current,
+          remote,
+        });
+        return;
+      }
+      revisionRef.current = remote.revision;
+      dirtyRef.current = false;
+      bundleRef.current = remote.bundle;
+      logsRef.current = remote.logs;
+      const cache = loadOfficeCache();
+      cache.entries[id] = { baseRevision: remote.revision, dirty: false, bundle: remote.bundle, logs: remote.logs };
+      saveOfficeCache(cache);
+      setUsers(remote.bundle.users);
+      setDepartments(remote.bundle.departments);
+      setPositions(remote.bundle.positions);
+      setAssignments(remote.bundle.assignments);
+      setPermissions(remote.bundle.permissions);
+      setRecords(remote.bundle.records);
+      setTags(remote.bundle.tags);
+      setTasks(remote.bundle.tasks);
+      setInvites(remote.bundle.invites);
+      setPendingUpload(false);
+      setSession((current) => {
+        if (!current || current.companyId !== id) return current;
+        const user = remote.bundle.users.find((item) => item.account === current.account);
+        if (!user) {
+          saveSession(null);
+          return null;
+        }
+        if (user.name === current.name && user.role === current.role) return current;
+        const next = { ...current, name: user.name, role: user.role };
+        saveSession(next);
+        return next;
+      });
+    };
+    const timer = window.setInterval(() => void refresh(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [company, companyState, ready]);
 
   const value = useMemo<OfficeContextValue>(() => {
     function currentBundle(): CompanyBundle {

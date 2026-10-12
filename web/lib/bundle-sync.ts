@@ -13,6 +13,14 @@ export type RemoteBundle = {
   logs: OperationLog[];
 };
 
+export type RemoteRefreshPlan = "noop" | "adopt" | "prompt";
+
+export function planRemoteRefresh(input: { dirty: boolean; baseRevision: number; remoteRevision: number }): RemoteRefreshPlan {
+  if (input.remoteRevision === input.baseRevision) return "noop";
+  if (input.dirty) return "prompt";
+  return "adopt";
+}
+
 export type SyncPlan =
   | { action: "use-remote" }
   | { action: "upload"; baseRevision: number; bundle: CompanyBundle; logs: OperationLog[] }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { emptyBundle, seedUsers, type CompanyBundle } from "./office.ts";
-import { isUntouchedSeed, planCompanySync, type RemoteBundle } from "./bundle-sync.ts";
+import { isUntouchedSeed, planCompanySync, planRemoteRefresh, type RemoteBundle } from "./bundle-sync.ts";
 
 function seedRemote(): RemoteBundle {
   return {
@@ -80,6 +80,16 @@ test("伺服器仍是預設種子時，舊本機資料上傳一次", () => {
   });
   assert.equal(plan.action, "upload");
   if (plan.action === "upload") assert.equal(plan.baseRevision, 1);
+});
+
+test("沒有未上傳變更時，另一端改用伺服器的新版本", () => {
+  assert.equal(planRemoteRefresh({ dirty: false, baseRevision: 2, remoteRevision: 2 }), "noop");
+  assert.equal(planRemoteRefresh({ dirty: false, baseRevision: 2, remoteRevision: 3 }), "adopt");
+});
+
+test("這台有未上傳變更時，遠端更新仍要先問", () => {
+  assert.equal(planRemoteRefresh({ dirty: true, baseRevision: 2, remoteRevision: 3 }), "prompt");
+  assert.equal(planRemoteRefresh({ dirty: true, baseRevision: 2, remoteRevision: 2 }), "noop");
 });
 
 test("伺服器已有別的內容時，舊本機資料不可直接覆蓋", () => {

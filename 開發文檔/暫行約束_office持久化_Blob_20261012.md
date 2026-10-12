@@ -18,17 +18,19 @@
 
 - 持久化＝**Vercel Blob** 存公司 bundle JSON。本輪**不做資料庫**。
 - 範圍資料＝**全公司 bundle**（與計劃書 V1.26／F-31 一致：帳戶、部門職位、工作紀錄、任務樹等屬該公司者），不是只存 office 狀態碎片。
-- 存放位置＝Vercel Blob 上依 **companyId** 的公司 bundle。一個 `companyId` 一份該公司 bundle JSON。修訂號、操作日誌與公司清單若要讓重啟後的 `/api/office/*` 仍讀得到，同樣放在 Vercel Blob，不另開資料庫。
+- 存放位置＝Vercel Blob 上依 **companyId** 的公司 bundle。一個 `companyId` 一份該公司 bundle JSON。修訂號、操作日誌與公司清單同樣放在 Vercel Blob，不另開資料庫。重啟／新建 serverless 實例後，已建公司仍可從 registry 讀到。
 - 現行程式的 `data/office.json` 只在同一個 Node 行程內有效，不能當部署環境的持久化。
-- 不另開環境。驗收部署環境為 **omb-s4y8**。
+- 不另開環境。驗收部署環境為 **omb-s4y8**。該環境須能讀到既有 Blob 設定（環境變數／Blob store）。
 
 ## 完成條件
 
 對應計劃書 V1.27 承諾 F-32。
 
-- [ ] 1. `/api/office/*` 在部署環境（omb-s4y8）回 **HTTP 200**（非 500、非空 body 失敗）。
+驗收前提：部署環境 **omb-s4y8** 須能讀到既有 Blob 設定（環境變數／Blob store）。否則驗收不得因「未配置」卡住而誤判為持久化失敗。
+
+- [ ] 1. `/api/office/*` 在部署環境（omb-s4y8）回 **HTTP 200**（非 500、非空 body 失敗）。此項指修復後**不再因缺持久化而 500／空 body 失敗**；業務 4xx（無權限、驗證失敗等）不在本項綁死。
 - [ ] 2. 兩設備、同公司兩帳戶可見相同公司資料。
-- [ ] 3. 重啟／新建 serverless 實例後資料仍在。
+- [ ] 3. 重啟／新建 serverless 實例後資料仍在。已建公司仍可從 registry 讀到。
 
 ## 明確不做
 

@@ -75,7 +75,7 @@ function ShellFrame({
   screen: FrameScreen;
   visible: typeof links;
 }) {
-  const { session } = useOffice();
+  const { session, pendingUpload } = useOffice();
   const Screen = screens[screen];
   if (!session) return null;
   return (
@@ -88,6 +88,9 @@ function ShellFrame({
           <div>
             <p className="text-[15px] font-bold">小型辦公</p>
             <p className="text-xs text-[#8b919d]">網頁版 · 第七版</p>
+            <p data-testid="sync-note" className="mt-1 max-w-[180px] text-[11px] leading-relaxed text-[#8b919d]">
+              公司資料存在伺服器。其他人先寫入時，覆蓋前會先詢問。
+            </p>
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto md:block" aria-label="主框架導覽">
@@ -131,9 +134,9 @@ function ShellFrame({
       </aside>
       <section className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-[52px] items-center justify-end px-5">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e6e8ee] bg-white px-2.5 py-1 text-xs">
+          <span data-testid="sync-state" className="inline-flex items-center gap-1.5 rounded-full border border-[#e6e8ee] bg-white px-2.5 py-1 text-xs">
             <span className="size-2 rounded-full bg-[#1fa85a] shadow-[0_0_0_3px_rgba(31,168,90,0.15)]" />
-            已登入 · 主框架
+            {pendingUpload ? "變更尚未寫入伺服器" : "已登入 · 主框架"}
           </span>
         </div>
         <div className="px-4 pb-8 md:px-7">

@@ -17,8 +17,8 @@ import {
   normalizeWorkRecord,
   type StaffPermission,
   type WorkRecord,
-} from "@/lib/office";
-import { normalizeTaskInvite, normalizeTaskNode } from "@/lib/tasks";
+} from "./office.ts";
+import { normalizeTaskInvite, normalizeTaskNode } from "./tasks.ts";
 
 export const USERS_KEY = "osp-dev-v1-users";
 export const SESSION_KEY = "osp-dev-v1-session";
@@ -237,7 +237,7 @@ function isLog(value: unknown): value is OperationLog {
   );
 }
 
-function bundleFromUnknown(companyId: string, value: unknown): CompanyBundle {
+export function normalizeCompanyBundle(companyId: string, value: unknown): CompanyBundle {
   const source = value && typeof value === "object" ? (value as Partial<CompanyBundle>) : {};
   const users = Array.isArray(source.users) ? source.users.filter(isUser) : [];
   return {
@@ -268,6 +268,16 @@ function bundleFromUnknown(companyId: string, value: unknown): CompanyBundle {
   };
 }
 
+export function normalizeCompanies(value: unknown): Company[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isCompany);
+}
+
+export function normalizeLogs(value: unknown): OperationLog[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isLog);
+}
+
 function readCompanies(): Company[] | null {
   if (typeof window === "undefined") return null;
   try {
@@ -275,7 +285,7 @@ function readCompanies(): Company[] | null {
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
-    const companies = parsed.filter(isCompany);
+    const companies = normalizeCompanies(parsed);
     return companies.length > 0 ? companies : null;
   } catch {
     return null;
@@ -290,7 +300,7 @@ function readBundles(): Record<string, CompanyBundle> {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     return Object.fromEntries(
-      Object.entries(parsed).map(([companyId, value]) => [companyId, bundleFromUnknown(companyId, value)]),
+      Object.entries(parsed).map(([companyId, value]) => [companyId, normalizeCompanyBundle(companyId, value)]),
     );
   } catch {
     return {};
@@ -302,25 +312,59 @@ export type OfficeStore = {
   bundles: Record<string, CompanyBundle>;
 };
 
-export function ensureOfficeStore(): OfficeStore {
+function hasStoredKey(key: string): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(key) !== null;
+}
+
+export function readLegacyOfficeStore(): OfficeStore | null {
+  if (typeof window === "undefined") return null;
   const existing = readCompanies();
   if (existing) {
     const bundles = readBundles();
     for (const company of existing) {
-      if (!bundles[company.id]) bundles[company.id] = bundleFromUnknown(company.id, emptyBundle());
+      if (!bundles[company.id]) bundles[company.id] = normalizeCompanyBundle(company.id, emptyBundle());
     }
     return { companies: existing, bundles };
   }
+  const hasOld =
+    hasStoredKey(USERS_KEY) ||
+    hasStoredKey(DEPARTMENTS_KEY) ||
+    hasStoredKey(POSITIONS_KEY) ||
+    hasStoredKey(ASSIGNMENTS_KEY) ||
+    hasStoredKey(PERMISSIONS_KEY) ||
+    hasStoredKey(RECORDS_KEY);
+  if (!hasOld) return null;
   const company = defaultCompany();
-  const bundle = bundleFromUnknown(company.id, {
-    users: loadUsers(),
-    departments: loadDepartments(),
-    positions: loadPositions(),
-    assignments: loadAssignments(),
-    permissions: loadPermissions(),
-    records: loadRecords(),
-  });
-  const store = { companies: [company], bundles: { [company.id]: bundle } };
+  return {
+    companies: [company],
+    bundles: {
+      [company.id]: normalizeCompanyBundle(company.id, {
+        users: loadUsers(),
+        departments: loadDepartments(),
+        positions: loadPositions(),
+        assignments: loadAssignments(),
+        permissions: loadPermissions(),
+        records: loadRecords(),
+      }),
+    },
+  };
+}
+
+export function ensureOfficeStore(): OfficeStore {
+  const legacy = readLegacyOfficeStore();
+  if (legacy) {
+    if (!readCompanies()) {
+      saveCompanies(legacy.companies);
+      window.localStorage.setItem(BUNDLES_KEY, JSON.stringify(legacy.bundles));
+    }
+    return legacy;
+  }
+  const company = defaultCompany();
+  const store = {
+    companies: [company],
+    bundles: { [company.id]: normalizeCompanyBundle(company.id, emptyBundle()) },
+  };
   saveCompanies(store.companies);
   window.localStorage.setItem(BUNDLES_KEY, JSON.stringify(store.bundles));
   return store;
@@ -343,7 +387,7 @@ export function loadLogs(): OperationLog[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isLog);
+    return normalizeLogs(parsed);
   } catch {
     return [];
   }
@@ -354,7 +398,21 @@ export function saveLogs(logs: OperationLog[]): void {
 }
 
 export function isCompanyDisabled(companyId: string): boolean {
-  return ensureOfficeStore().companies.some((item) => item.id === companyId && item.disabled);
+  const local = readCompanies()?.some((item) => item.id === companyId && item.disabled) ?? false;
+  if (typeof window === "undefined") return local;
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "/api/office/registry", false);
+    xhr.send();
+    if (xhr.status !== 200) return local;
+    const parsed: unknown = JSON.parse(xhr.responseText);
+    const companies = normalizeCompanies(parsed && typeof parsed === "object" ? (parsed as { companies?: unknown }).companies : null);
+    if (companies.length === 0) return local;
+    saveCompanies(companies);
+    return companies.some((item) => item.id === companyId && item.disabled);
+  } catch {
+    return local;
+  }
 }
 
 export function loadDeveloperSession(): boolean {

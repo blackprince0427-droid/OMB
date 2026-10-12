@@ -132,27 +132,29 @@ export function ConsoleView() {
               className="space-y-3"
               onSubmit={(event) => {
                 event.preventDefault();
-                const data = new FormData(event.currentTarget);
-                const result = openCompany({
-                  name: String(data.get("name") ?? ""),
+                const form = event.currentTarget;
+                const data = new FormData(form);
+                const name = String(data.get("name") ?? "");
+                const account = String(data.get("account") ?? "");
+                void openCompany({
+                  name,
                   website: String(data.get("website") ?? ""),
                   ceoName: String(data.get("ceoName") ?? ""),
-                  account: String(data.get("account") ?? ""),
+                  account,
                   password: String(data.get("password") ?? ""),
+                }).then((result) => {
+                  if (result.error) {
+                    setCreateOk("");
+                    setCreatePath("");
+                    setCreateError(result.error);
+                    return;
+                  }
+                  setCreateError("");
+                  setCreatePath(result.path);
+                  setCreateOk(`已建立公司「${name.trim()}」，初始 CEO 帳戶為 ${account.trim()}。`);
+                  setLogTick((value) => value + 1);
+                  form.reset();
                 });
-                if (result.error) {
-                  setCreateOk("");
-                  setCreatePath("");
-                  setCreateError(result.error);
-                  return;
-                }
-                setCreateError("");
-                setCreatePath(result.path);
-                setCreateOk(
-                  `已建立公司「${String(data.get("name") ?? "").trim()}」，初始 CEO 帳戶為 ${String(data.get("account") ?? "").trim()}。`,
-                );
-                setLogTick((value) => value + 1);
-                event.currentTarget.reset();
               }}
             >
               <div className="space-y-1.5">
@@ -196,18 +198,19 @@ export function ConsoleView() {
               className="space-y-3"
               onSubmit={(event) => {
                 event.preventDefault();
-                const data = new FormData(event.currentTarget);
-                const name = String(data.get("name") ?? "");
-                const message = disableCompanyByName(name);
-                if (message) {
-                  setDisableOk("");
-                  setDisableError(message);
-                  return;
-                }
-                setDisableError("");
-                setDisableOk(`已停用「${name.trim()}」。`);
-                setLogTick((value) => value + 1);
-                event.currentTarget.reset();
+                const form = event.currentTarget;
+                const name = String(new FormData(form).get("name") ?? "");
+                void disableCompanyByName(name).then((message) => {
+                  if (message) {
+                    setDisableOk("");
+                    setDisableError(message);
+                    return;
+                  }
+                  setDisableError("");
+                  setDisableOk(`已停用「${name.trim()}」。`);
+                  setLogTick((value) => value + 1);
+                  form.reset();
+                });
               }}
             >
               <div className="space-y-1.5">

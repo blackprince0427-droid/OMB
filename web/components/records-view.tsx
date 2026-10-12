@@ -159,7 +159,7 @@ export function RecordsView() {
                 return;
               }
               setError("");
-              setOk(editingId ? "已修改歸屬自己的工作紀錄。" : assignee === session.account ? "已新增工作紀錄。" : "已新增工作紀錄並指定歸屬。同一瀏覽器輪流登入後，新歸屬者可以修改。沒有即時通知。");
+              setOk(editingId ? "已修改歸屬自己的工作紀錄。" : assignee === session.account ? "已新增工作紀錄。" : "已新增工作紀錄並指定歸屬。新歸屬者可以修改。沒有即時通知。");
               setEditingId("");
               setTitle("");
               setContent("");

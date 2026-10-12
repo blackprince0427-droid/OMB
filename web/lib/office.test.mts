@@ -581,11 +581,12 @@ test("分交後只有新歸屬者可以修改與完成", () => {
   assert.equal(done.ok, true);
   if (!done.ok) return;
   assert.equal(done.value[0]?.done, true);
-  assert.match(HANDOFF_COPY, /同一瀏覽器輪流登入/);
+  assert.match(HANDOFF_COPY, /新歸屬者可以修改/);
   assert.match(HANDOFF_COPY, /沒有即時通知/);
+  assert.doesNotMatch(HANDOFF_COPY, /飛書/);
 });
 
-test("跨人待辦依歸屬與權限聚合，文案寫明同一瀏覽器輪流登入", () => {
+test("跨人待辦依歸屬與權限聚合，文案不把資料說成只在同一瀏覽器", () => {
   const positions: Position[] = [
     { id: "p-high", departmentId: "d1", name: "主任", rank: 2, createdAt: "" },
     { id: "p-low", departmentId: "d1", name: "職員", rank: 1, createdAt: "" },
@@ -624,10 +625,11 @@ test("跨人待辦依歸屬與權限聚合，文案寫明同一瀏覽器輪流�
   if (!override.ok) return;
   const widened = crossPersonTodos(records, "CLERK", assignments, positions, override.value);
   assert.deepEqual(widened.visibleToMe.map((item) => item.title), ["自己的"]);
-  assert.match(CROSS_PERSON_COPY, /同一瀏覽器/);
-  assert.match(CROSS_PERSON_COPY, /輪流登入/);
+  assert.match(CROSS_PERSON_COPY, /歸屬與權限/);
+  assert.match(CROSS_PERSON_COPY, /伺服器上的同一份公司資料/);
   assert.match(CROSS_PERSON_COPY, /沒有即時通知/);
-  assert.match(CROSS_PERSON_COPY, /不是即時多人同時協作/);
+  assert.match(CROSS_PERSON_COPY, /不是即時同時編輯/);
+  assert.doesNotMatch(CROSS_PERSON_COPY, /飛書/);
 });
 
 test("專案標籤可建立並寫入紀錄，列表可依標籤辨識", () => {

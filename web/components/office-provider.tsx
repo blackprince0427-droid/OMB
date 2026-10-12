@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -25,13 +26,9 @@ import {
   changePassword,
   changePosition,
   companyBaseFromPath,
-  companyForLocation,
   completeWorkRecord,
-  createCompanyWithInitialCeo,
-  disableCompany,
   emptyBundle,
   isConsolePath,
-  logsForCompany,
   officeRouteKey,
   parseWebsite,
   reassignWorkRecord,
@@ -42,6 +39,7 @@ import {
   type CompanyBundle,
   type Department,
   type OfficeUser,
+  type OperationLog,
   type Position,
   type ProjectTag,
   type Role,
@@ -69,17 +67,18 @@ import {
   type TaskNode,
   type VisibilityMode,
 } from "@/lib/tasks";
+import { OverwritePrompt } from "@/components/overwrite-prompt";
+import { legacyEligible, loadOfficeCache, markMigrated, saveOfficeCache } from "@/lib/office-cache";
+import { createCompanyRemote, disableCompanyRemote, fetchBundle, putBundle } from "@/lib/office-api";
+import { loadOfficeScreen, type LoadConflict } from "@/lib/office-load";
 import {
   COMPANIES_KEY,
-  ensureOfficeStore,
   isCompanyDisabled,
   loadDeveloperSession,
   loadLogs,
   loadSession,
-  saveCompanies,
-  saveCompanyBundle,
+  readLegacyOfficeStore,
   saveDeveloperSession,
-  saveLogs,
   saveSession,
 } from "@/lib/storage";
 
@@ -90,7 +89,7 @@ export type Activity = {
   tag: string;
 };
 
-export type CompanyState = "ready" | "missing" | "disabled" | "backend";
+export type CompanyState = "ready" | "missing" | "disabled" | "backend" | "offline";
 
 type OfficeContextValue = {
   ready: boolean;
@@ -108,6 +107,7 @@ type OfficeContextValue = {
   tags: ProjectTag[];
   tasks: TaskNode[];
   invites: TaskInvite[];
+  pendingUpload: boolean;
   login: (account: string, password: string) => string | null;
   createUser: (input: {
     name: string;
@@ -152,8 +152,8 @@ type OfficeContextValue = {
     ceoName: string;
     account: string;
     password: string;
-  }) => { error: string | null; path: string };
-  disableCompanyByName: (name: string) => string | null;
+  }) => Promise<{ error: string | null; path: string }>;
+  disableCompanyByName: (name: string) => Promise<string | null>;
   listCompanies: () => Company[];
   companyLogs: (companyId: string) => { at: string; actor: string; action: string }[];
 };
@@ -179,71 +179,108 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<TaskNode[]>([]);
   const [invites, setInvites] = useState<TaskInvite[]>([]);
   const [developer, setDeveloper] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [logsByCompany, setLogsByCompany] = useState<Record<string, { at: string; actor: string; action: string }[]>>({});
+  const [pendingUpload, setPendingUpload] = useState(false);
+  const [conflict, setConflict] = useState<LoadConflict | null>(null);
+  const [conflictError, setConflictError] = useState("");
+  const [conflictPending, setConflictPending] = useState(false);
   const ready = loadedFor === routeKey;
+  const companyIdRef = useRef<string | null>(null);
+  const revisionRef = useRef(0);
+  const dirtyRef = useRef(false);
+  const bundleRef = useRef<CompanyBundle>(emptyBundle());
+  const logsRef = useRef<OperationLog[]>([]);
+  const flushing = useRef(false);
+  const conflictRef = useRef(false);
 
   useEffect(() => {
-    const store = ensureOfficeStore();
-    const path = window.location.pathname;
-    // 登入狀態在瀏覽器裡。首屏要和伺服器一致，所以等掛載後才讀取。
+    let cancelled = false;
+    // 登入狀態在瀏覽器裡。公司資料以伺服器為準，掛載後才讀。
     // 工作分頁共用同一個 routeKey，切換時不重讀，避免整頁閃回「正在確認登入狀態」。
-    /* eslint-disable react-hooks/set-state-in-effect -- localStorage and sessionStorage are not available during SSR */
-    if (isConsolePath(path)) {
-      setCompany(null);
-      setCompanyState("backend");
-      setDeveloper(loadDeveloperSession());
-      setSession(null);
-      setUsers([]);
-      setDepartments([]);
-      setPositions([]);
-      setAssignments([]);
-      setPermissions([]);
-      setRecords([]);
-      setTags([]);
-      setTasks([]);
-      setInvites([]);
-      setLoadedFor("backend");
-      return;
-    }
-    const found = companyForLocation(store.companies, window.location.origin, path);
-    if (!found) {
-      setCompany(null);
-      setCompanyState("missing");
-      setDeveloper(false);
-      setSession(null);
-      setUsers([]);
-      setDepartments([]);
-      setPositions([]);
-      setAssignments([]);
-      setPermissions([]);
-      setRecords([]);
-      setTags([]);
-      setTasks([]);
-      setInvites([]);
+    (async () => {
+      const path = window.location.pathname;
+      const outcome = await loadOfficeScreen({
+        path,
+        origin: window.location.origin,
+        cache: loadOfficeCache(),
+        legacy: legacyEligible() ? readLegacyOfficeStore() : null,
+        legacyLogs: loadLogs(),
+        legacyEligible: legacyEligible(),
+      });
+      if (cancelled) return;
+      if (outcome.markMigrated) {
+        saveOfficeCache(outcome.cache);
+        markMigrated();
+      }
+      companyIdRef.current = outcome.company?.id ?? null;
+      revisionRef.current = outcome.revision;
+      dirtyRef.current = outcome.dirty;
+      bundleRef.current = outcome.bundle;
+      logsRef.current = outcome.logs;
+      setCompanies(outcome.companies);
+      setPendingUpload(outcome.dirty);
+      const dev = isConsolePath(path) && loadDeveloperSession();
+      setDeveloper(dev);
+      if (dev) {
+        const pairs = await Promise.all(
+          outcome.companies.map(async (item) => {
+            const remote = await fetchBundle(item.id);
+            const logs = remote.ok && remote.found ? remote.logs : outcome.cache.entries[item.id]?.logs ?? [];
+            return [item.id, logs.map((log) => ({ at: log.at, actor: log.actor, action: log.action }))] as const;
+          }),
+        );
+        if (cancelled) return;
+        setLogsByCompany(Object.fromEntries(pairs));
+      }
+      if (outcome.conflict) {
+        conflictRef.current = true;
+        setConflict(outcome.conflict);
+        setConflictError("");
+      } else {
+        conflictRef.current = false;
+        setConflict(null);
+      }
+      if (isConsolePath(path)) {
+        setCompany(null);
+        setCompanyState("backend");
+        setSession(null);
+        setUsers([]);
+        setDepartments([]);
+        setPositions([]);
+        setAssignments([]);
+        setPermissions([]);
+        setRecords([]);
+        setTags([]);
+        setTasks([]);
+        setInvites([]);
+        setLoadedFor(routeKey);
+        return;
+      }
+      setCompany(outcome.company);
+      setCompanyState(outcome.companyState === "backend" ? "missing" : outcome.companyState);
+      setUsers(outcome.bundle.users);
+      setDepartments(outcome.bundle.departments);
+      setPositions(outcome.bundle.positions);
+      setAssignments(outcome.bundle.assignments);
+      setPermissions(outcome.bundle.permissions);
+      setRecords(outcome.bundle.records);
+      setTags(outcome.bundle.tags);
+      setTasks(outcome.bundle.tasks);
+      setInvites(outcome.bundle.invites);
+      if (outcome.companyState === "disabled") {
+        saveSession(null);
+        setSession(null);
+      } else if (outcome.company && outcome.companyState === "ready") {
+        setSession(loadSession(outcome.bundle.users, outcome.company.id));
+      } else {
+        setSession(null);
+      }
       setLoadedFor(routeKey);
-      return;
-    }
-    const bundle = store.bundles[found.id] ?? emptyBundle();
-    setDeveloper(false);
-    setCompany(found);
-    setCompanyState(found.disabled ? "disabled" : "ready");
-    setUsers(bundle.users);
-    setDepartments(bundle.departments);
-    setPositions(bundle.positions);
-    setAssignments(bundle.assignments);
-    setPermissions(bundle.permissions);
-    setRecords(bundle.records);
-    setTags(bundle.tags);
-    setTasks(bundle.tasks);
-    setInvites(bundle.invites);
-    if (found.disabled) {
-      const current = loadSession(bundle.users, found.id);
-      if (current) saveSession(null);
-      setSession(null);
-    } else {
-      setSession(loadSession(bundle.users, found.id));
-    }
-    setLoadedFor(routeKey);
-    /* eslint-enable react-hooks/set-state-in-effect */
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [routeKey]);
 
   useEffect(() => {
@@ -260,17 +297,105 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, [company]);
 
+  useEffect(() => {
+    if (!developer || companies.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const pairs = await Promise.all(
+        companies.map(async (item) => {
+          const remote = await fetchBundle(item.id);
+          const logs = remote.ok && remote.found ? remote.logs : [];
+          return [item.id, logs.map((log) => ({ at: log.at, actor: log.actor, action: log.action }))] as const;
+        }),
+      );
+      if (!cancelled) setLogsByCompany(Object.fromEntries(pairs));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [companies, developer]);
+
   const value = useMemo<OfficeContextValue>(() => {
     function currentBundle(): CompanyBundle {
       return { users, departments, positions, assignments, permissions, records, tags, tasks, invites };
     }
-    function writeBundle(next: CompanyBundle) {
+    function remember(nextBundle: CompanyBundle, nextLogs: OperationLog[], dirty: boolean) {
       if (!company) return;
-      saveCompanyBundle(company.id, next);
+      companyIdRef.current = company.id;
+      bundleRef.current = nextBundle;
+      logsRef.current = nextLogs;
+      dirtyRef.current = dirty;
+      const cache = loadOfficeCache();
+      cache.entries[company.id] = { baseRevision: revisionRef.current, dirty, bundle: nextBundle, logs: nextLogs };
+      if (!cache.companies.some((item) => item.id === company.id)) cache.companies = [...cache.companies, company];
+      saveOfficeCache(cache);
+      setPendingUpload(dirty);
+    }
+    async function flush() {
+      if (flushing.current || conflictRef.current) return;
+      flushing.current = true;
+      try {
+        while (dirtyRef.current && !conflictRef.current) {
+          await Promise.resolve();
+          const id = companyIdRef.current;
+          if (!id || !dirtyRef.current || conflictRef.current) break;
+          const sentBundle = bundleRef.current;
+          const sentLogs = logsRef.current;
+          const result = await putBundle({
+            companyId: id,
+            baseRevision: revisionRef.current,
+            bundle: sentBundle,
+            logs: sentLogs,
+          });
+          if (!result.ok && result.conflict) {
+            conflictRef.current = true;
+            setConflictError("");
+            setConflict({
+              companyId: id,
+              localBundle: bundleRef.current,
+              localLogs: logsRef.current,
+              remote: result,
+            });
+            break;
+          }
+          if (!result.ok) {
+            setPendingUpload(true);
+            break;
+          }
+          revisionRef.current = result.revision;
+          if (sentBundle === bundleRef.current && sentLogs === logsRef.current) {
+            bundleRef.current = result.bundle;
+            logsRef.current = result.logs;
+            dirtyRef.current = false;
+            const cache = loadOfficeCache();
+            cache.entries[id] = { baseRevision: result.revision, dirty: false, bundle: result.bundle, logs: result.logs };
+            saveOfficeCache(cache);
+            setPendingUpload(false);
+            break;
+          }
+          const cache = loadOfficeCache();
+          cache.entries[id] = {
+            baseRevision: result.revision,
+            dirty: true,
+            bundle: bundleRef.current,
+            logs: logsRef.current,
+          };
+          saveOfficeCache(cache);
+        }
+      } finally {
+        flushing.current = false;
+      }
+    }
+    function writeBundle(next: CompanyBundle) {
+      if (!company || conflictRef.current) return;
+      remember(next, logsRef.current, true);
+      void flush();
     }
     function note(actor: string, action: string) {
-      if (!company) return;
-      saveLogs(appendOperationLog(loadLogs(), { companyId: company.id, actor, action }, new Date()));
+      if (!company || conflictRef.current) return;
+      const nextLogs = appendOperationLog(logsRef.current, { companyId: company.id, actor, action }, new Date());
+      remember(bundleRef.current, nextLogs, true);
+      void flush();
     }
     function stopped(): string | null {
       if (!company || !isCompanyDisabled(company.id)) return null;
@@ -296,6 +421,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
       tags,
       tasks,
       invites,
+      pendingUpload,
       developer,
       developerLogin(account, password) {
         if (!authenticateDeveloper(account, password)) return "開發人員帳戶或密碼不正確。";
@@ -308,6 +434,7 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         setDeveloper(false);
       },
       login(account, password) {
+        if (conflictRef.current) return "請先處理公司資料覆蓋提示。";
         const halt = stopped();
         if (halt) return halt;
         if (!company || company.disabled) return "此公司已停用，帳戶不得登入。";
@@ -664,53 +791,54 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
         setTasks(result.value);
         return null;
       },
-      openCompany(input) {
+      async openCompany(input) {
         if (!developer) return { error: "請先以開發人員登入。", path: "" };
-        const store = ensureOfficeStore();
-        const result = createCompanyWithInitialCeo(store.companies, input, new Date());
+        const result = await createCompanyRemote(input);
         if (!result.ok) return { error: result.error, path: "" };
-        saveCompanies([...store.companies, result.value.company]);
-        saveCompanyBundle(result.value.company.id, { ...emptyBundle(), users: [result.value.user] });
-        saveLogs(
-          appendOperationLog(
-            loadLogs(),
-            { companyId: result.value.company.id, actor: "開發者後台", action: "建立公司與初始 CEO" },
-            new Date(),
-          ),
-        );
-        const parsed = parseWebsite(result.value.company.website);
+        const cache = loadOfficeCache();
+        cache.companies = result.companies;
+        cache.entries[result.company.id] = {
+          baseRevision: result.revision,
+          dirty: false,
+          bundle: result.bundle,
+          logs: result.logs,
+        };
+        saveOfficeCache(cache);
+        setCompanies(result.companies);
+        setLogsByCompany((current) => ({
+          ...current,
+          [result.company.id]: result.logs.map((item) => ({ at: item.at, actor: item.actor, action: item.action })),
+        }));
+        const parsed = parseWebsite(result.company.website);
         const path = !parsed || (parsed.host !== null && parsed.host !== window.location.host) ? "" : parsed.path;
         return { error: null, path };
       },
-      disableCompanyByName(name) {
+      async disableCompanyByName(name) {
         if (!developer) return "請先以開發人員登入。";
-        const store = ensureOfficeStore();
-        const result = disableCompany(store.companies, name);
+        const result = await disableCompanyRemote(name);
         if (!result.ok) return result.error;
-        saveCompanies(result.value);
-        const current = result.value.find((item) => item.name === name.trim());
-        if (current) {
-          saveLogs(
-            appendOperationLog(
-              loadLogs(),
-              { companyId: current.id, actor: "開發者後台", action: "停用公司" },
-              new Date(),
-            ),
-          );
+        const cache = loadOfficeCache();
+        cache.companies = result.companies;
+        const entry = cache.entries[result.companyId];
+        if (entry && !entry.dirty) {
+          entry.baseRevision = result.revision;
+          entry.logs = result.logs;
         }
+        saveOfficeCache(cache);
+        setCompanies(result.companies);
+        setLogsByCompany((current) => ({
+          ...current,
+          [result.companyId]: result.logs.map((item) => ({ at: item.at, actor: item.actor, action: item.action })),
+        }));
         return null;
       },
       listCompanies() {
         if (!developer) return [];
-        return ensureOfficeStore().companies;
+        return companies;
       },
       companyLogs(companyId) {
         if (!developer) return [];
-        return logsForCompany(loadLogs(), companyId).map((item) => ({
-          at: item.at,
-          actor: item.actor,
-          action: item.action,
-        }));
+        return logsByCompany[companyId] ?? [];
       },
     };
   }, [
@@ -729,10 +857,89 @@ export function OfficeProvider({ children }: { children: ReactNode }) {
     tags,
     tasks,
     invites,
+    pendingUpload,
     users,
+    companies,
+    logsByCompany,
   ]);
 
-  return <OfficeContext.Provider value={value}>{children}</OfficeContext.Provider>;
+  async function confirmOverwrite() {
+    if (!conflict) return;
+    setConflictPending(true);
+    setConflictError("");
+    const result = await putBundle({
+      companyId: conflict.companyId,
+      baseRevision: conflict.remote.revision,
+      bundle: conflict.localBundle,
+      logs: conflict.localLogs,
+      force: true,
+    });
+    setConflictPending(false);
+    if (!result.ok) {
+      if (result.conflict) {
+        setConflict({ ...conflict, remote: result });
+        setConflictError("伺服器上的公司資料又更新了，請再選一次。");
+      } else {
+        setConflictError(result.error);
+      }
+      return;
+    }
+    applyResolved(conflict.companyId, result.revision, result.bundle, result.logs);
+  }
+
+  function cancelOverwrite() {
+    if (!conflict) return;
+    applyResolved(conflict.companyId, conflict.remote.revision, conflict.remote.bundle, conflict.remote.logs);
+  }
+
+  function applyResolved(companyId: string, revision: number, bundle: CompanyBundle, logs: OperationLog[]) {
+    const cache = loadOfficeCache();
+    cache.entries[companyId] = { baseRevision: revision, dirty: false, bundle, logs };
+    saveOfficeCache(cache);
+    conflictRef.current = false;
+    setConflict(null);
+    setConflictError("");
+    setLogsByCompany((current) => ({
+      ...current,
+      [companyId]: logs.map((item) => ({ at: item.at, actor: item.actor, action: item.action })),
+    }));
+    if (companyIdRef.current !== companyId) return;
+    revisionRef.current = revision;
+    dirtyRef.current = false;
+    bundleRef.current = bundle;
+    logsRef.current = logs;
+    setUsers(bundle.users);
+    setDepartments(bundle.departments);
+    setPositions(bundle.positions);
+    setAssignments(bundle.assignments);
+    setPermissions(bundle.permissions);
+    setRecords(bundle.records);
+    setTags(bundle.tags);
+    setTasks(bundle.tasks);
+    setInvites(bundle.invites);
+    setPendingUpload(false);
+    setSession((current) => {
+      if (current && !bundle.users.some((user) => user.account === current.account)) {
+        saveSession(null);
+        return null;
+      }
+      return current;
+    });
+  }
+
+  return (
+    <OfficeContext.Provider value={value}>
+      {children}
+      {conflict ? (
+        <OverwritePrompt
+          error={conflictError}
+          pending={conflictPending}
+          onConfirm={() => void confirmOverwrite()}
+          onCancel={cancelOverwrite}
+        />
+      ) : null}
+    </OfficeContext.Provider>
+  );
 }
 
 export function useOffice(): OfficeContextValue {

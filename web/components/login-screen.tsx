@@ -31,6 +31,19 @@ export function LoginScreen() {
     );
   }
 
+  if (companyState === "offline") {
+    return (
+      <main className="grid min-h-svh place-items-center bg-[#f4f5f7] px-6">
+        <section className="w-full max-w-[440px] rounded-2xl border border-[#e6e8ee] bg-white px-7 py-7">
+          <h1 className="text-[22px] font-bold">暫時連不上公司資料</h1>
+          <p data-testid="sync-offline" className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+            請稍後再試。登入狀態仍只留在這個分頁，公司資料要等伺服器恢復後才寫入。
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   if (companyState === "missing") {
     return (
       <main className="grid min-h-svh place-items-center bg-[#f4f5f7] px-6">
@@ -121,7 +134,10 @@ export function LoginScreen() {
             登入
           </Button>
         </form>
-        <p className="mt-3.5 text-xs leading-relaxed text-[#8b919d]">
+        <p data-testid="sync-login-note" className="mt-3.5 text-xs leading-relaxed text-[#8b919d]">
+          同一公司在其他瀏覽器登入後，會讀到已寫入伺服器的資料。覆蓋伺服器前會先詢問。
+        </p>
+        <p className="mt-1.5 text-xs leading-relaxed text-[#8b919d]">
           {isDefault
             ? "驗收對照：帳戶 CEO、密碼 CEO 可登入；錯誤密碼停留於此頁。登入後可在「帳戶」更改自己的密碼，並可登出返回此頁。"
             : "此網站只使用這一家公司的帳戶。"}

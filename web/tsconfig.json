@@ -12,6 +12,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
     "incremental": true,
     "plugins": [
       {
@@ -30,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "lib/office.test.mts", "lib/tasks.test.mts", "lib/task-tree-view.test.mts"]
+  "exclude": ["node_modules", "lib/office.test.mts", "lib/tasks.test.mts", "lib/task-tree-view.test.mts", "lib/bundle-sync.test.mts", "lib/server-office.test.mts", "lib/office-load.test.mts"]
 }
